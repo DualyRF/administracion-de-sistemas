@@ -25,7 +25,7 @@ Function configScope{
 	param ( [string] $nombre,
 	[string] $rangoIni,
 	[string] $rangoFin,
-	[string] $masc,
+	[string] $masc
 	)
 
 	Add-DhcpServerV4Scope -Name $nombre
@@ -123,8 +123,6 @@ switch($opc) {
 
 ## opcion 6
 
-	6 {
-		write-host "Saliendo..."  -ForegroundColor Yellow; exit
-	}
+	6 { write-host "Saliendo..."  -ForegroundColor Yellow; exit }
 
 }
