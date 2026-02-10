@@ -1,4 +1,4 @@
-Function validarRango{
+Function validarIP{
 	param ([string] $ip)
 	
 ## validacion para checar si la ip esta ocupada
@@ -20,6 +20,19 @@ Function instalacionDHCP{
 	Install-WindowsFeature -Name DHCP -IncludeManagementTools
 }
 
+
+Function configScope{
+	param ( [string] $nombre,
+	[string] $rangoIni,
+	[string] $rangoFin,
+	[string] $masc,
+	)
+
+	Add-DhcpServerV4Scope -Name $nombre
+	-StartRange $rangoIni
+	-EndRange $rangoFin
+	-SubnetMask $masc
+}
 
 #	 MAIN
 
@@ -46,7 +59,7 @@ switch($opc) {
 		if ($dhcpEstado.InstallState -eq "Installed"){
 			write-host "DHCP ya se encuentra instalado :)" -ForegroundColor Green
 			write-host "Informacion actual: " -ForegroundColor Red
-			get-DhcpServerv4Scope
+			get-DhcpServerv4Configuration
 		}
 		else {
 			write-host "DHCP no se encuentra instalado :o" -ForegroundColor Red
@@ -73,7 +86,7 @@ switch($opc) {
 		$ipEntrada = Read-Host "Ingresa tu IP"
 
 		if ($ipEntrada -match "^[0-9]+\.+[0-9]+\.[0-9]+\.[0-9]+$"){
-		validarRango -ip $ipEntrada
+		validarIP -ip $ipEntrada
 		}
 		else{
 			Write-Host "Ip invalida" -ForegroundColor Yellow
@@ -84,13 +97,28 @@ switch($opc) {
 
 	4 {
 		write-host "Configuracion actual:"  -ForegroundColor Yellow
+		get-DhcpServerv4Configuration
+
+		$opcn = read-host "Desea modificar? (S/N)" 
+			if ($opcn -eq "S"){
+				$nombreE = read-host "Nombre del Scope: "
+				$rangoIniE = read-host "Inicio: "
+				$rangoFinE = read-host "Fin: "
+				$mascE = read-host Mascara de subred: "
+				$duracionE = read-host "Duración: "
+
+				configScope -nombre $nombreE -rangoIni $rangoIniE -rangoFin $rangoFinE -masc $mascE -duracion $duracionE
+			}
+			else {
+				write-host "Entendido, regresando al menú..."
+			}
 	}
 
 ## opcion 5
 
 	5 {
 		write-host "Reiniciando servicio..." -ForegroundColor Yellow
-		Restart-service dhcpserver
+		Restart-Service DHCPServer -Force
 	}
 
 ## opcion 6
