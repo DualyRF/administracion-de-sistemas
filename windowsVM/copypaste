@@ -8,6 +8,11 @@ if ($checkLease) { Write-Host "Esa IP ya está en uso por $($checkLease.ClientId
 
 Get-CimInstance Win32_NetworkAdapterConfiguration -Filter "DHCPEnabled=$true" | Select DHCPServer
 
+    configurar (agregar scope)
+Add-DhcpServerv4Scope -Name "Office B" -StartRange 192.168.1.100 -EndRange 192.168.1.254 -SubnetMask 255.255.255.0 -State Active   
+
+    verificar
+Get-DhcpServerv4Scope   
 
 
     configurar el scope
