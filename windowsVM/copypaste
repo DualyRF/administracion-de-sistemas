@@ -6,3 +6,93 @@ if ($checkLease) { Write-Host "Esa IP ya está en uso por $($checkLease.ClientId
 configurar el scope
 
 Add-DhcpServerV4Scope -Name "DHCP Scope" -StartRange 192.168.1.150 -EndRange 192.168.1.200 -SubnetMask 255.255.255.0
+
+codigo corregido ajajaj
+Function validarIP {
+    param ([string]$ip)
+    
+    # Validación ocupada
+    $chequeo = Get-DhcpServerv4Lease -ScopeId 192.168.100.0 | Where-Object IPAddress -eq $ip
+    if ($chequeo) { 
+        Write-Host "Esa IP ya esta en uso por $($chequeo.ClientId)" -ForegroundColor Yellow 
+    }
+
+    # Validación rango
+    $regexRango = "^192\.168\.100\.([5-9]\d|1[0-4]\d|150)$"
+    if ($ip -match $regexRango) {
+        Write-Host "Ip correcta :D" -ForegroundColor Green
+    }
+    else {
+        Write-Host "Rango Incorrecto :///" -ForegroundColor Red
+    }
+}
+
+Function instalacionDHCP {
+    Write-Host "Instalando características de DHCP..." -ForegroundColor Cyan
+    Install-WindowsFeature -Name DHCP -IncludeManagementTools
+}
+
+Function configScope {
+    param ( 
+        [string]$nombre,
+        [string]$rangoIni,
+        [string]$rangoFin,
+        [string]$masc
+    )
+    # Usamos backtick (`) para continuar el comando en varias líneas
+    Add-DhcpServerV4Scope -Name $nombre `
+                          -StartRange $rangoIni `
+                          -EndRange $rangoFin `
+                          -SubnetMask $masc
+}
+
+# --- MAIN ---
+do {
+    Clear-Host
+    Write-Host "------------------------" -ForegroundColor Blue
+    Write-Host "         MENÚ          " 
+    Write-Host "1- Verificar la instalacion DHCP"
+    Write-Host "2- Instalación silenciosa"
+    Write-Host "3- Monitoreo IPs"
+    Write-Host "4- Ver configuración"
+    Write-Host "5- Reiniciar servicio DHCP"
+    Write-Host "6- Salir"
+    Write-Host "------------------------" -ForegroundColor Blue
+    $opc = Read-Host "Elija su opcion"
+
+    switch ($opc) {
+        1 {
+            $dhcpEstado = Get-WindowsFeature -Name DHCP
+            if ($dhcpEstado.InstallState -eq "Installed") {
+                Write-Host "DHCP ya se encuentra instalado :)" -ForegroundColor Green
+                Get-DhcpServerv4Configuration
+            }
+            else {
+                Write-Host "DHCP no está instalado" -ForegroundColor Red
+                if ((Read-Host "¿Desea instalarlo? (S/N)") -eq "S") { instalacionDHCP }
+            }
+        }
+        2 { instalacionDHCP }
+        3 {
+            $ipEntrada = Read-Host "Ingresa tu IP"
+            if ($ipEntrada -match "^(\d{1,3}\.){3}\d{1,3}$") {
+                validarIP -ip $ipEntrada
+            } else {
+                Write-Host "Formato inválido" -ForegroundColor Red
+            }
+        }
+        4 {
+            Get-DhcpServerv4Scope
+            if ((Read-Host "¿Desea crear un nuevo Scope? (S/N)") -eq "S") {
+                $n = Read-Host "Nombre"
+                $i = Read-Host "Inicio"
+                $f = Read-Host "Fin"
+                $m = Read-Host "Mascara"
+                configScope -nombre $n -rangoIni $i -rangoFin $f -masc $m
+            }
+        }
+        5 { Restart-Service DHCPServer -Force; Write-Host "Reiniciado" -ForegroundColor Green }
+        6 { Write-Host "Saliendo..."; exit }
+    }
+    pause
+} while ($opc -ne 6)
