@@ -1,2 +1,0 @@
-$checkLease = Get-DhcpServerv4Lease -ScopeId 192.168.100.0 | Where-Object IPAddress -eq $ip
-if ($checkLease) { Write-Host "Esa IP ya está en uso por $($checkLease.ClientId)" }

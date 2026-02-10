@@ -1,0 +1,8 @@
+validacion para saber si la ip esta siendo usada o no
+
+$checkLease = Get-DhcpServerv4Lease -ScopeId 192.168.100.0 | Where-Object IPAddress -eq $ip
+if ($checkLease) { Write-Host "Esa IP ya está en uso por $($checkLease.ClientId)" }
+
+configurar el scope
+
+Add-DhcpServerV4Scope -Name "DHCP Scope" -StartRange 192.168.1.150 -EndRange 192.168.1.200 -SubnetMask 255.255.255.0
