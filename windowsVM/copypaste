@@ -97,3 +97,15 @@ cortado
 			Write-Host "Ip invalida" -ForegroundColor Yellow
 			Start-Sleep -Seconds 5
 		}
+
+--------------------------------
+
+$scopes = Get-DhcpServerv4Scope -ErrorAction SilentlyContinue
+
+if ($null -eq $scopes) {
+    Write-Host "No hay scopes creados actualmente." -ForegroundColor Red
+} else {
+    $conteo = ($scopes).Count
+    Write-Host "Se encontraron $conteo scopes activos:" -ForegroundColor Green
+    $scopes | Format-Table -AutoSize
+}
