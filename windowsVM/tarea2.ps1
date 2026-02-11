@@ -18,6 +18,38 @@ Function validarIP{
 	}
 }
 
+
+Function mostrarRedes {
+	Write-Host "Equipos conectados:" -ForegroundColor Yellow
+	$leases = Get-DhcpServerv4Lease -ScopeId 192.168.100.0 -ErrorAction SilentlyContinue
+	Start-Sleep -Seconds 3
+
+	if ($leases) {
+        	$leases | Select-Object IPAddress, ClientId, HostName, LeaseExpiryTime | Format-Table -AutoSize
+		Start-Sleep -Seconds 5
+    	} else {
+        	Write-Host "No hay concesiones activas o el Scope no existe." -ForegroundColor Gray
+		Start-Sleep -Seconds 3
+    	}
+}
+
+Function configRed{
+	$scopeId = "192.168.10.0"
+
+	Add-DhcpServerv4Scope -Name "Rango" `
+                      -StartRange 192.168.100.50 `
+                      -EndRange 192.168.100.150 `
+                      -SubnetMask 255.255.255.0 `
+                      -State Active
+
+	Set-DhcpServerv4OptionValue -ScopeId $scopeId -OptionId 3 -Value 192.168.10.1        # gateway
+	Set-DhcpServerv4OptionValue -ScopeId $scopeId -OptionId 6 -Value 8.8.8.8             # dns
+
+	Set-DhcpServerv4Scope -ScopeId $scopeId -LeaseDuration 1.00:00:00 		     # 1 día
+
+}
+
+
 Function instalacionDHCP{
 	Install-WindowsFeature -Name DHCP -IncludeManagementTools
     	Write-Host "DHCP ha sido instalado correctamente :D" -ForegroundColor Green
@@ -74,9 +106,6 @@ switch($opc) {
 
 		if ($dhcpEstado.InstallState -eq "Installed"){
 			write-host "DHCP ya se encuentra instalado :)" -ForegroundColor Green
-			write-host "Informacion actual: " -ForegroundColor Red
-			Get-DhcpServerv4Scope 
-			Start-Sleep -Seconds 5
 		}
 		else {
 			write-host "DHCP no se encuentra instalado :o" -ForegroundColor Red
@@ -127,19 +156,19 @@ switch($opc) {
 ### opcion 3
 
 	3 {
-		write-host "Configuracion actual:"  -ForegroundColor Yellow
-		Get-DhcpServerv4Scope 
-		Start-Sleep -Seconds 5
-
-		$ipEntrada = Read-Host "Ingresa tu IP"
-
-		if ($ipEntrada -match "^[0-9]+\.+[0-9]+\.[0-9]+\.[0-9]+$"){
-		validarIP -ip $ipEntrada
-		}
-		else{
-			Write-Host "Ip invalida" -ForegroundColor Yellow
-			Start-Sleep -Seconds 5
-		}
+		$estadoServicio = Get-Service -Name DHCPServer -ErrorAction SilentlyContinue
+		write-host "Verificando estado..."
+			if ($estadoServicio.Status -eq "Running"){
+				Write-Host "Estado del Servicio: " -NoNewline
+			        Write-Host "$($estadoServicio.Status)"
+				Start-Sleep -Seconds 3
+			}
+			else {
+				Write-Host "El servicio DHCP no está instalado en este equipo." -ForegroundColor Red
+				Start-Sleep -Seconds 2
+        			return
+			}
+		mostrarRedes
 	}
 
 ## opcion 4
@@ -149,7 +178,7 @@ switch($opc) {
 		clear-host
 		write-host "------------------------" -ForegroundColor Green
 		write-host "Menu Scope" -ForegroundColor Green
-		write-host "1- Ver Scope actual"
+		write-host "1- Ver configuración actual"
 		write-host "2- Modificar Scope"
 		write-host "3- Eliminar Scope"
 		write-host "4- Volver al menu principal" -ForegroundColor Yellow
@@ -160,7 +189,7 @@ switch($opc) {
 
 			1 {
 				write-host "Configuracion actual:"  -ForegroundColor Yellow
-				Get-DhcpServerv4Scope 
+				Get-DhcpServerv4Scope-
 				Start-Sleep -Seconds 5	
 			}
 

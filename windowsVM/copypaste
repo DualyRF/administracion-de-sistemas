@@ -78,3 +78,20 @@ Function diagnosticoDHCP {
     
     Read-Host "`nPresione Enter para volver al menú"
 }
+
+------------------------------------
+cortado
+
+		write-host "Configuracion actual:"  -ForegroundColor Yellow
+		Get-DhcpServerv4Scope 
+		Start-Sleep -Seconds 5
+
+		$ipEntrada = Read-Host "Ingresa tu IP"
+
+		if ($ipEntrada -match "^[0-9]+\.+[0-9]+\.[0-9]+\.[0-9]+$"){
+		validarIP -ip $ipEntrada
+		}
+		else{
+			Write-Host "Ip invalida" -ForegroundColor Yellow
+			Start-Sleep -Seconds 5
+		}
