@@ -31,3 +31,17 @@ Get-DhcpServerv4Scope
 
 Add-DhcpServerV4Scope -Name "DHCP Scope" -StartRange 192.168.1.150 -EndRange 192.168.1.200 -SubnetMask 255.255.255.0
 
+--------------------
+
+$scopeId = "192.168.10.0"
+
+Add-DhcpServerv4Scope -Name "Rango" `
+                      -StartRange 192.168.100.50 `
+                      -EndRange 192.168.100.150 `
+                      -SubnetMask 255.255.255.0 `
+                      -State Active
+
+Set-DhcpServerv4OptionValue -ScopeId $scopeId -OptionId 3 -Value 192.168.10.1        # gateway
+Set-DhcpServerv4OptionValue -ScopeId $scopeId -OptionId 6 -Value 8.8.8.8             # dns
+
+Set-DhcpServerv4Scope -ScopeId $scopeId -LeaseDuration 1.00:00:00 # 1 día
