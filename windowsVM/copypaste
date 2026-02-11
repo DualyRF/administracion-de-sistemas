@@ -45,3 +45,36 @@ Set-DhcpServerv4OptionValue -ScopeId $scopeId -OptionId 3 -Value 192.168.10.1   
 Set-DhcpServerv4OptionValue -ScopeId $scopeId -OptionId 6 -Value 8.8.8.8             # dns
 
 Set-DhcpServerv4Scope -ScopeId $scopeId -LeaseDuration 1.00:00:00 # 1 día
+
+------------------------------------------------------
+
+Function diagnosticoDHCP {
+    Write-Host "=== DIAGNÓSTICO DEL SERVICIO DHCP ===" -ForegroundColor Cyan
+    
+    # 1. Consultar estado del servicio
+    $servicio = Get-Service -Name DHCPServer -ErrorAction SilentlyContinue
+    
+    if ($servicio) {
+        $color = if ($servicio.Status -eq "Running") { "Green" } else { "Red" }
+        Write-Host "Estado del Servicio: " -NoNewline
+        Write-Host "$($servicio.Status)" -ForegroundColor $color
+    } else {
+        Write-Host "El servicio DHCP no está instalado en este equipo." -ForegroundColor Red
+        return
+    }
+
+    Write-Host "-------------------------------------"
+
+    # 2. Listar concesiones (Leases) activas
+    Write-Host "Equipos conectados (Leases activas):" -ForegroundColor Yellow
+    $leases = Get-DhcpServerv4Lease -ScopeId 192.168.100.0 -ErrorAction SilentlyContinue
+
+    if ($leases) {
+        # Formateamos la salida como tabla para que sea legible
+        $leases | Select-Object IPAddress, ClientId, HostName, LeaseExpiryTime | Format-Table -AutoSize
+    } else {
+        Write-Host "No hay concesiones activas o el Scope no existe." -ForegroundColor Gray
+    }
+    
+    Read-Host "`nPresione Enter para volver al menú"
+}
