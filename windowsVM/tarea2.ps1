@@ -4,7 +4,7 @@ Function validarIP{
 ## validacion para checar si la ip esta ocupada
 
 	$chequeo = Get-DhcpServerv4Lease -ScopeId 192.168.100.0 | Where-Object IPAddress -eq $ip
-	if ($chequeo) { Write-Host "Esa IP ya esta en uso por $($chequeo.ClientId) Start-Sleep -Seconds 5" }
+	if ($chequeo) { Write-Host "Esa IP ya esta en uso por $($chequeo.ClientId)" Start-Sleep -Seconds 5 }
 
 ## validacion para checar si el rango de la ip es acertado
 	$regexRango = "^192\.168\.100\.([5-9]\d|1[0-4]\d|150)$"
@@ -59,7 +59,7 @@ write-host "2- Instalacion silenciosa"
 write-host "3- Monitoreo IPs"
 write-host "4- Ver configuracion de Scope"
 write-host "5- Reiniciar servicio DHCP"
-write-host "6- "Desinstalar servicio DHCP"
+write-host "6- Desinstalar servicio DHCP"
 write-host "7- Salir" -ForegroundColor Red
 write-host "------------------------" -ForegroundColor Blue
 $opc = read-host "Elija su opcion"
@@ -154,9 +154,9 @@ switch($opc) {
 		write-host "3- Eliminar Scope"
 		write-host "4- Volver al menu principal" -ForegroundColor Yellow
 		write-host "------------------------" -ForegroundColor Green
-		$opc = read-host "Elija su opcion"
+		$opcScope = read-host "Elija su opcion"
 
-		switch($opc) {
+		switch($opcScope) {
 
 			1 {
 				write-host "Configuracion actual:"  -ForegroundColor Yellow
@@ -171,7 +171,7 @@ switch($opc) {
                 		$m = Read-Host "Mascara"
 				$d = Read-Host "Duracion"
 
-				configScope -nombre $n -rangoIni $i -rangoFin $f -masc $m -duracion
+				configScope -nombre $n -rangoIni $i -rangoFin $f -masc $d -duracion
 				Start-Sleep -Seconds 3
 			}
 
@@ -215,7 +215,9 @@ switch($opc) {
 
 ## opcion 7
 
-	7 { write-host "Saliendo..."  -ForegroundColor Yellow; exit }
-
-}
+	7 { 
+            Write-Host "Saliendo..." -ForegroundColor Yellow
+            return 
+        }
+    }
 } while ($opc -ne 7)
