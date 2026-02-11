@@ -26,6 +26,8 @@ Add-DhcpServerv4Scope -Name "Office B" -StartRange 192.168.1.100 -EndRange 192.1
     verificar
 Get-DhcpServerv4Scope   
 
+Get-DhcpServerv4Scope | Select-Object ScopeId, Name, StartRange, EndRange, SubnetMask, State | Format-Table -AutoSize
+
 
     configurar el scope
 
