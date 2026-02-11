@@ -109,3 +109,10 @@ if ($null -eq $scopes) {
     Write-Host "Se encontraron $conteo scopes activos:" -ForegroundColor Green
     $scopes | Format-Table -AutoSize
 }
+
+
+$dias = Read-Host "Ingrese la cantidad de días de duración (ej. 8)"
+$duracionTS = New-TimeSpan -Days $dias
+
+# Luego se aplica al Scope
+Set-DhcpServerv4Scope -ScopeId 192.168.100.0 -LeaseDuration $duracionTS
