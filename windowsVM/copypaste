@@ -3,6 +3,13 @@
 $checkLease = Get-DhcpServerv4Lease -ScopeId 192.168.100.0 | Where-Object IPAddress -eq $ip
 if ($checkLease) { Write-Host "Esa IP ya está en uso por $($checkLease.ClientId)" }
 
+desinstalar dhcp
+
+Function desinstalarDHCP {
+    Write-Host "Desinstalando DHCP... Por favor espere." -ForegroundColor Yellow
+    Uninstall-WindowsFeature -Name DHCP -IncludeManagementTools
+    Write-Host "DHCP ha sido desinstalado correctamente." -ForegroundColor Green
+}
 
     dhcp     
 
