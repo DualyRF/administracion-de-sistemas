@@ -1,12 +1,50 @@
 Function validarIP{
 	param ([string] $ip)
+
+## validacion para checar si la ip tiene formato x.x.x.x
+
+	if ($ipEntrada -match "^[0-9]+\.+[0-9]+\.[0-9]+\.[0-9]+$"){
+		write-host "Formato válido"
+	}
+	else {
+		Write-Host "Ip invalida" -ForegroundColor Yellow
+		Start-Sleep -Seconds 3
+		return
+	}
+
 	
 ## validacion para checar si la ip esta ocupada
 
 	$chequeo = Get-DhcpServerv4Lease -ScopeId 192.168.100.0 | Where-Object IPAddress -eq $ip
-	if ($chequeo) { Write-Host "Esa IP ya esta en uso por $($chequeo.ClientId)" Start-Sleep -Seconds 5 }
+	if ($chequeo) { 
+		Write-Host "Esa IP ya esta en uso por $($chequeo.ClientId)" Start-Sleep -Seconds 4
+		return
+	}
 
 ## validacion para checar si el rango de la ip es acertado
+	$regexRango = "^192\.168\.100\.([5-9]\d|1[0-4]\d|150)$"
+	if ($ip -match $regexRango){
+		Write-Host "Ip dentro del rango" -ForegroundColor Green
+		Start-Sleep -Seconds 1
+	}
+	else {
+		Write-Host "Rango Incorrecto ://" -ForegroundColor Red
+		Start-Sleep -Seconds 2
+		return
+	}
+}
+
+
+
+Function validarIP2{
+	param ([string] $ipi, [string] $ipf)
+	
+## validacion para checar si la ip esta ocupada
+
+	$chequeo = Get-DhcpServerv4Lease -ScopeId 192.168.100.0 | Where-Object IPAddress -eq $ipf
+	if ($chequeo) { Write-Host "Esa IP ya esta en uso por $($chequeo.ClientId)" Start-Sleep -Seconds 3 }
+
+## validacion para checar si el rango de la ip final es acertado
 	$regexRango = "^192\.168\.100\.([5-9]\d|1[0-4]\d|150)$"
 	if ($ip -match $regexRango){
 		Write-Host "Ip correcta :D" -ForegroundColor Green
@@ -16,7 +54,22 @@ Function validarIP{
 		Write-Host "Rango Incorrecto :///" -ForegroundColor Red
 		Start-Sleep -Seconds 5
 	}
+
+## validacion para checar si la ip final es mayor q la ip inicial
+	
+	$ipicv = [int]($ipi -split'\.')[3]
+	$ipfcv = [int]($ipf -split'\.')[3]
+
+	if ($ipfcv -gt $ipicv) {
+		$validacion = $true
+	}
+	else {
+		$validacion = $false
+	}	
+
 }
+
+
 
 
 Function mostrarRedes {
@@ -34,16 +87,13 @@ Function mostrarRedes {
 }
 
 Function configRed{
-	$scopeId = "192.168.10.0"
+
 
 	Add-DhcpServerv4Scope -Name "Rango" `
                       -StartRange 192.168.100.50 `
                       -EndRange 192.168.100.150 `
                       -SubnetMask 255.255.255.0 `
                       -State Active
-
-	Set-DhcpServerv4OptionValue -ScopeId $scopeId -OptionId 3 -Value 192.168.10.1        # gateway
-	Set-DhcpServerv4OptionValue -ScopeId $scopeId -OptionId 6 -Value 8.8.8.8             # dns
 
 	Set-DhcpServerv4Scope -ScopeId $scopeId -LeaseDuration 1.00:00:00 		     # 1 día
 
@@ -52,6 +102,7 @@ Function configRed{
 
 Function instalacionDHCP{
 	Install-WindowsFeature -Name DHCP -IncludeManagementTools
+	Start-Sleep -Seconds 3
     	Write-Host "DHCP ha sido instalado correctamente :D" -ForegroundColor Green
 }
 
@@ -68,15 +119,26 @@ Function configScope{
 	[string] $rangoIni,
 	[string] $rangoFin,
 	[string] $masc,
-	[string] $duracion
+	[int] $duracion
 	)
+
+	$scopeId = "192.168.10.0"
 
     Add-DhcpServerv4Scope -Name $nombre `
 	-StartRange $rangoIni `
         -EndRange $rangoFin `
-        -SubnetMask $masc
+        -SubnetMask $masc `
+	-State Active
 
-	Set-DhcpServerScope -ScopeId 192.168.100.0 -LeaseDuration $duracion
+	Set-DhcpServerv4OptionValue -ScopeId $scopeId -OptionId 3 -Value 192.168.10.1        # gateway
+	Set-DhcpServerv4OptionValue -ScopeId $scopeId -OptionId 6 -Value 8.8.8.8             # dns
+	
+
+	$dconv = New-TimeSpan -Days $duracion
+	Set-DhcpServerv4Scope -ScopeId $rangoIni -LeaseDuration $dconv
+
+	write-host "Scope agregado con exito" -ForegroundColor Green
+	Start-Sleep -Seconds 3
 }
 
 #	 MAIN
@@ -91,8 +153,7 @@ write-host "2- Instalacion silenciosa"
 write-host "3- Monitoreo IPs"
 write-host "4- Ver configuracion de Scope"
 write-host "5- Reiniciar servicio DHCP"
-write-host "6- Desinstalar servicio DHCP"
-write-host "7- Salir" -ForegroundColor Red
+write-host "6- Salir" -ForegroundColor Red
 write-host "------------------------" -ForegroundColor Blue
 $opc = read-host "Elija su opcion"
 
@@ -106,6 +167,7 @@ switch($opc) {
 
 		if ($dhcpEstado.InstallState -eq "Installed"){
 			write-host "DHCP ya se encuentra instalado :)" -ForegroundColor Green
+			Start-Sleep -Seconds 4
 		}
 		else {
 			write-host "DHCP no se encuentra instalado :o" -ForegroundColor Red
@@ -159,8 +221,7 @@ switch($opc) {
 		$estadoServicio = Get-Service -Name DHCPServer -ErrorAction SilentlyContinue
 		write-host "Verificando estado..."
 			if ($estadoServicio.Status -eq "Running"){
-				Write-Host "Estado del Servicio: " -NoNewline
-			        Write-Host "$($estadoServicio.Status)"
+				mostrarRedes
 				Start-Sleep -Seconds 3
 			}
 			else {
@@ -168,7 +229,6 @@ switch($opc) {
 				Start-Sleep -Seconds 2
         			return
 			}
-		mostrarRedes
 	}
 
 ## opcion 4
@@ -178,8 +238,8 @@ switch($opc) {
 		clear-host
 		write-host "------------------------" -ForegroundColor Green
 		write-host "Menu Scope" -ForegroundColor Green
-		write-host "1- Ver configuración actual"
-		write-host "2- Modificar Scope"
+		write-host "1- Ver Scopes activos"
+		write-host "2- Agregar Scope"
 		write-host "3- Eliminar Scope"
 		write-host "4- Volver al menu principal" -ForegroundColor Yellow
 		write-host "------------------------" -ForegroundColor Green
@@ -187,20 +247,30 @@ switch($opc) {
 
 		switch($opcScope) {
 
-			1 {
-				write-host "Configuracion actual:"  -ForegroundColor Yellow
-				Get-DhcpServerv4Scope-
-				Start-Sleep -Seconds 5	
+			1 {	
+				$scopes = Get-DhcpServerv4Scope -ErrorAction SilentlyContinue
+
+				if ($null -eq $scopes) {
+	    				Write-Host "No hay scopes creados actualmente." -ForegroundColor Red
+					Start-Sleep -Seconds 5
+				} else {
+					$conteo = ($scopes).Count
+	    				Write-Host "Se encontraron $conteo scopes activos:" -ForegroundColor Green
+	    				Get-DhcpServerv4Scope | Select-Object ScopeId, Name, StartRange, EndRange, SubnetMask, State | Format-Table -AutoSize
+					Start-Sleep -Seconds 5
+				}
 			}
 
 			2 {
 				$n = Read-Host "Nombre"
                 		$i = Read-Host "Inicio"
+				validarIP -ip $i
                 		$f = Read-Host "Fin"
+				validarIP2 -ipi $i -ipf $f
                 		$m = Read-Host "Mascara"
-				$d = Read-Host "Duracion"
+				$d = Read-Host "Duracion (en días, ejemplo: 1)"
 
-				configScope -nombre $n -rangoIni $i -rangoFin $f -masc $d -duracion
+				configScope -nombre $n -rangoIni $i -rangoFin $f -masc $m -duracion $d
 				Start-Sleep -Seconds 3
 			}
 
@@ -227,26 +297,12 @@ switch($opc) {
 	}
 
 
+
 ## opcion 6
 
-	6 {
-		$opc = Read-Host "Está seguro de que desea desinstalar DHCP? (s/n)"
-		if ($opc -eq "s"){
-			write-host "Desinstalando servicio..." -ForegroundColor Yellow
-			desinstalarDHCP
-		}
-		else {
-			write-host "Entendido, regresando al menu principal..."
-			Start-Sleep -Seconds 2
-		}
-	}
-
-
-## opcion 7
-
-	7 { 
+	6 { 
             Write-Host "Saliendo..." -ForegroundColor Yellow
             return 
         }
     }
-} while ($opc -ne 7)
+} while ($opc -ne 6)
