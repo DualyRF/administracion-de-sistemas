@@ -165,9 +165,9 @@ validar_Mascara(){
 	fi
 	
 	# Validar que sean 255, 252, 248, 240, 224, 192, 128 y 0
-	for octeto in $a $b $c $d; do
-		for i in {0..7}
-	done
+	# for octeto in $a $b $c $d; do
+		
+	# done
 	
 	# Validar que no tenga 0 al izquierda y que no pasen los rangos de 8 bits
 	for octeto in $a $b $c $d; do
