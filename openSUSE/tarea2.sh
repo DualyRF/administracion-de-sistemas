@@ -1,9 +1,9 @@
 #Tarea 2 - Automatizacion y gestion del servidor DHCP'
 
 # ----------Colores para que sea mas intuitivo ----------
-rojo='\033[0;31m'
-amarillo='\033[1;33m'
-verde='\033[0;32m'
+rojo='\033[0;95m'  
+amarillo='\033[1;93m'
+verde='\033[0;96m'
 azul='\033[1;34m'
 nc='\033[0m'
 
@@ -15,14 +15,14 @@ ayuda() {
     # Todas las opciones
     echo "Uso del script: $0"
     echo "Opciones:"
-    echo -e "  ${azul}-v, --verify       ${nc}Verifica si esta instalada la paqueteria DHCP"
-    echo -e "  ${azul}-i, --install      ${nc}Instala la paqueteria DHCP"
-    echo -e "  ${azul}-c, --configurar   ${nc}Configurar servidor DHCP"
-    echo -e "  ${azul}-m, --monitor      ${nc}Monitorear clientes DHCP"
-    echo -e "  ${azul}-r, --restart      ${nc}Reiniciar servidor DHCP"
-	echo -e "  ${azul}-s, --status		 ${nc}Status del servidor DHCP"
-	echo -e "  ${azul}-sh, --showConfig  ${nc}Ver configuración actual"
-    echo -e "  ${azul}-?, --help         ${nc}Muestra esta ayuda/menu"
+    echo -e "  ${azul}-vr, --verify       ${nc}Verifica si esta instalada la paqueteria DHCP"
+    echo -e "  ${azul}-is, --install      ${nc}Instala la paqueteria DHCP"
+    echo -e "  ${azul}-cf, --configurar   ${nc}Configurar servidor DHCP"
+    echo -e "  ${azul}-mt, --monitor      ${nc}Monitorear clientes DHCP"
+    echo -e "  ${azul}-rt, --restart      ${nc}Reiniciar servidor DHCP"
+	echo -e "  ${azul}-st, --status		 ${nc}Status del servidor DHCP"
+	echo -e "  ${azul}-sc, --showConfig  ${nc}Ver configuración actual"
+    echo -e "  ${azul}-help, --help         ${nc}Muestra esta ayuda/menu"
 }
 
 calcular_Rango(){
@@ -127,19 +127,19 @@ validar_IP(){
 
     # Validar los espacios reservados para uso experimental (127.0.0.1-127.255.255.255)
 	if [[ "$a" -eq 127 ]]; then
-		echo -e "Direccion IP invalida, las direcciones del rango 127.0.0.1 al 127.255.255.255 estan reservadas para host local${nc}"
+		echo -e "Direccion IP invalida! las direcciones del rango 127.0.0.1 al 127.255.255.255 estan reservadas para el host local${nc}"
 		return 1
 	fi
 
 	# Validar los espacios reservados para uso experimental (240.0.0.0-255.255.255.254)
 	if [[ "$a" -gt 240 && "$a" -lt 255 ]]; then
-		echo -e "Direccion IP invalida, las direcciones del rango 240.0.0.0 al 255.255.255.254 estan reservadas para usos experimentales${nc}"
+		echo -e "Direccion IP invalida! las direcciones del rango 240.0.0.0 al 255.255.255.254 estan reservadas${nc}"
 		return 1
 	fi
 
 	# Validar los espacios reservados para multicast (224.0.0.0-239.255.255.255)
 	if [[ "$a" -gt 224 && "$a" -lt 239 ]]; then
-		echo -e "Direccion IP invalida, las direcciones del rango 224.0.0.0 al 239.255.255.255 estan reservadas para multicast${nc}"
+		echo -e "Direccion IP invalida! las direcciones del rango 224.0.0.0 al 239.255.255.255 estan reservadas para multicast${nc}"
 		return 1
 	fi
 
@@ -153,14 +153,14 @@ validar_Mascara(){
 	
 	# Validar formato X.X.X.X solo con numeros
 	if ! [[ "$masc" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
-		echo -e "Mascara invalida, tiene que contener un formato X.X.X.X unicamente con numeros positivos${nc}"
+		echo -e "Mascara invalida, tiene que contener un formato X.X.X.X ${nc}"
 		return 1
 	fi
 
 	# Validar cada octeto entre 0 y 255
 	IFS='.' read -r a b c d <<< "$masc"
 	if [ "$a" -eq 0 ]; then
-		echo -e "Mascara invalida, no puede ser 0.X.X.X${nc}"
+		echo -e "Mascara invalida, no puede iniciar con 0, ej: 0.X.X.X${nc}"
 		return 1
 	fi
 	
@@ -420,7 +420,7 @@ ver_Configuracion(){
 }
 
 ver_Estado(){
-    echo -e "${azul}=== ESTADO DEL SERVIDOR DHCP ===${nc}\n"
+    echo -e "${azul}ESTADO DEL SERVIDOR DHCP ${nc}\n"
     sudo systemctl status dhcpd --no-pager
 }
 
@@ -444,7 +444,7 @@ verificar_Instalacion(){
 instalar_DHCP(){
     # Instalar DHCP
 	sudo zypper --non-interactive install dhcp-server
-	echo -e "${verde}DHCP esta instalado, continuando con la configuracion...${nc}"
+	echo -e "${verde}DHCP ya esta instalado, continuando con la configuracion...${nc}"
 }
 
 configurar_DHCP(){
@@ -634,12 +634,12 @@ EOF
 
 # ---------- Main ----------
 case $1 in
-    -v | --verify) verificar_Instalacion ;;
-    -i | --install) instalar_DHCP ;;
-    -c | --config) configurar_DHCP ;;
-    -m | --monitor) monitorear_Clientes ;;
-    -r | --restart) reiniciar_DHCP ;;
-	-s | --status) ver_Estado ;;
+    -help | --help) ayuda ;;
+    -mt | --monitor) monitorear_Clientes ;;
+    -rt | --restart) reiniciar_DHCP ;;
+	-st | --status) ver_Estado ;;
 	-sc | --showConfig) ver_Configuracion ;;
-    -? | --help) ayuda ;;
+    -vr | --verify) verificar_Instalacion ;;
+    -is | --install) instalar_DHCP ;;
+    -cf | --config) configurar_DHCP ;;
 esac
