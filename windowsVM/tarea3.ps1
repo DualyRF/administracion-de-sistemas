@@ -73,7 +73,8 @@ function configuracionZona {
     $opc = Read-Host "Desea agregar una zona? (y/n)"
     if ($opc -eq "y") { 
         $n = Read-Host "Dame el nombre de la zona"
-        $n = Read-Host "Dame el nombre del archivo para la zona"
+        # Esto toma el nombre y le pega ".dns" al final automáticamente
+        $zf = "$n.dns"
 
         agregarZonaPrimaria2 -name $n -zoneFile $zf
     }
