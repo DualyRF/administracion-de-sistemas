@@ -60,9 +60,9 @@ function configuracionDNS {
 }
 
 function instalacionDNS {
-  Write-Host " ------------------------ " -ForegroundColor $amarillo
-  Write-Host "Instalacion de DNS Server" -ForegroundColor $amarillo
-  Write-Host " ------------------------ " -ForegroundColor $amarillo
+  Write-Host " ---------------------------- " -ForegroundColor $rosa
+  Write-Host "Instalacion de DNS Server" -ForegroundColor $rosa
+  Write-Host " ---------------------------- " -ForegroundColor $rosa
     
     # Verificar si ya está instalado
     $dnsEstado = Get-WindowsFeature -Name *DNS*
@@ -163,9 +163,9 @@ function mostrarMenu {
         "4" {
             $DNSEstado = Get-WindowsFeature -Name *DNS*
             if ($DNSEstado.InstallState -eq "Installed") {
-                $n = Read-Host"Dame el nombre del registro"
-                $zn = Read-Host"Dame el nombre de la zona"
-                $i = Read-Host"Dame la IP para la zona"
+                $n = Read-Host "Dame el nombre del registro"
+                $zn = Read-Host "Dame el nombre de la zona"
+                $i = Read-Host "Dame la IP para la zona"
                 agregarRegistro -name $n, -zoneName $zn, -ip $i
             }
             else {
@@ -175,7 +175,7 @@ function mostrarMenu {
             mostrarMenu
         }
         "5" {
-            Write-Host "`nSaliendo..." -ForegroundColor $verde
+            Write-Host "`nSaliendo..." -ForegroundColor $rosa
             exit
         }
         default {
