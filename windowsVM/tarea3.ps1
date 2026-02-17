@@ -13,7 +13,14 @@ function agregarRegistro {
         [string]$ip
     )
 
-    Add-DNSServerResourceRecordA -Name $name -ZoneName $zoneName  -AllowUpdateAny -IPv4Address $ip
+    try {
+        # -ErrorAction Stop es para que el 'catch' funcione
+         Add-DNSServerResourceRecordA -Name $name -ZoneName $zoneName  -AllowUpdateAny -IPv4Address $ip  -ErrorAction Stop
+        Write-Host "El registro '$name' se ha creado correctamente." -ForegroundColor $verde
+    }
+    catch {
+        Write-Host "No se pudo crear el registro. Detalles: $($_.Exception.Message)" -ForegroundColor $rojo
+    }
 }
 
 function agregarZonaPrimaria {
@@ -25,7 +32,14 @@ function agregarZonaPrimaria {
 function agregarZonaPrimaria2 {
     param([string]$name, [string]$zoneFile)
 
-    Add-DnsServerPrimaryZone -Name $name -ZoneFile $zoneFile
+    try {
+        # -ErrorAction Stop es para que el 'catch' funcione
+        Add-DnsServerPrimaryZone -Name $name -ZoneFile $zoneFile -ErrorAction Stop
+        Write-Host "La zona '$name' se ha creado correctamente." -ForegroundColor $verde
+    }
+    catch {
+        Write-Host "No se pudo crear la zona. Detalles: $($_.Exception.Message)" -ForegroundColor $rojo
+    }
 }
 
 
@@ -36,7 +50,13 @@ function agregarZonaSecundaria {
         [string]$ipMS
     )
 
-    Add-DnsServerSecondaryZone -Name $name -ZoneFile $zoneFile -MasterServers $ipMS    
+    try {
+        Add-DnsServerSecondaryZone -Name $name -ZoneFile $zoneFile -MasterServers $ipMS -ErrorAction Stop
+        Write-Host "La zona '$name' se ha creado correctamente." -ForegroundColor $verde
+    }
+    catch {
+        Write-Host "No se pudo crear la zona. Detalles: $($_.Exception.Message)" -ForegroundColor $rojo
+    }
 }
 
 function actualizarRegistro{
@@ -45,15 +65,28 @@ function actualizarRegistro{
         [string]$zoneName,
         [string]$ip
     )
+    try {
+        $registro = Get-DnsServerResourceRecord -Name $name -ZoneName $zoneName
+        $registro.RecordData.IPv4Address = $ip
+        Set-DnsServerResourceRecord -NewInputObject $registro -OldInputObject $registro -ZoneName $name  -ErrorAction Stop
 
-    $registro = Get-DnsServerResourceRecord -Name $name -ZoneName $zoneName
-    $registro.RecordData.IPv4Address = $ip
-    Set-DnsServerResourceRecord -NewInputObject $registro -OldInputObject $registro -ZoneName $name   
+        Write-Host "El registro '$name' se ha actualizado correctamente." -ForegroundColor $verde
+    }
+    catch {
+        Write-Host "No se pudo actualizar el registro. Detalles: $($_.Exception.Message)" -ForegroundColor $rojo
+    }
 }
 
 function eliminarZona {
     param([string]$name)
-    Remove-DnsServerZone -Name $name -Force 
+
+    try {
+        Remove-DnsServerZone -Name $name -Force -ErrorAction Stop
+        Write-Host "La zona '$name' se ha eliminado correctamente." -ForegroundColor $verde
+    }
+    catch {
+        Write-Host "No se pudo eliminar la zona. Detalles: $($_.Exception.Message)" -ForegroundColor $rojo
+    }
 }
 
 function eliminarRegistro {
@@ -61,7 +94,20 @@ function eliminarRegistro {
         [string]$name,
         [string]$zoneName
     )
-    Remove-DnsServerResourceRecord -ZoneName $zoneName -RRType A -Name $name -Force   
+
+    try {
+        Remove-DnsServerResourceRecord -ZoneName $zoneName -RRType A -Name $name -Force  -ErrorAction Stop
+        Write-Host "El registro '$name' se ha eliminado correctamente." -ForegroundColor $verde
+    }
+    catch {
+        Write-Host "No se pudo eliminar el registro. Detalles: $($_.Exception.Message)" -ForegroundColor $rojo
+    }
+
+      
+}
+
+function configuracionDNS{
+    Get-DnsServer
 }
 
 function configuracionZona {
@@ -70,6 +116,12 @@ function configuracionZona {
     Write-Host " ------------------------ " -ForegroundColor $rosa
     Get-DnsServerZone  
     
+    Write-Host " ------------------------ " -BackgroundColor $rosa -ForegroundColor White
+    Write-Host " Registros existentes" -BackgroundColor $rosa -ForegroundColor White
+    Write-Host " ------------------------ " -BackgroundColor $rosa -ForegroundColor White
+    Get-DnsServerResourceRecord
+
+
     $opc = Read-Host "Desea agregar una zona? (y/n)"
     if ($opc -eq "y") { 
         $n = Read-Host "Dame el nombre de la zona"
