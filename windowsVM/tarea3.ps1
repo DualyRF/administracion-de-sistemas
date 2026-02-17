@@ -166,7 +166,7 @@ function mostrarMenu {
                 $n = Read-Host "Dame el nombre del registro"
                 $zn = Read-Host "Dame el nombre de la zona"
                 $i = Read-Host "Dame la IP para la zona"
-                agregarRegistro -name $n, -zoneName $zn, -ip $i
+                agregarRegistro -name $n -zoneName $zn -ip $i
             }
             else {
                 Write-Host "DNS no esta instalado. Instálelo primero." -ForegroundColor $rojo
