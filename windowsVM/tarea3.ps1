@@ -105,7 +105,7 @@ function instalacionDNS {
 }
 
 function verificarInstalacion {
-    $DNSEstado = Get-WindowsFeature -Name DNS
+    $DNSEstado = Get-WindowsFeature -Name *DNS*
 
     if ($DNSEstado.InstallState -eq "Installed") {
         Write-Host "DNS ya se encuentra instalado" -ForegroundColor $verde
@@ -184,4 +184,24 @@ function mostrarMenu {
             mostrarMenu
         }
     }
+}
+
+# ---------- Main ----------
+param(
+    [switch]$v,
+    [switch]$i,
+    [switch]$c
+)
+
+if ($v) {
+    verificar_Instalacion
+}
+elseif ($i) {
+    instalacionDHCP
+}
+elseif ($c) {
+    configuracionDHCP
+}
+else {
+    mostrarMenu
 }
