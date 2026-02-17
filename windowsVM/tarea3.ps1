@@ -49,6 +49,14 @@ function eliminarZona {
     Remove-DnsServerZone -Name $name -Force 
 }
 
+function eliminarRegistro {
+    param(
+        [string]$name,
+        [string]$zoneName
+    )
+    Remove-DnsServerResourceRecord -ZoneName $zoneName -RRType A -Name $name -Force   
+}
+
 function configuracionZona {
     Write-Host " ------------------------ " -ForegroundColor $rosa
     Write-Host " Zonas existentes" -ForegroundColor $rosa
