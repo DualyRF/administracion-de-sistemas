@@ -17,12 +17,9 @@ function agregarRegistro {
 }
 
 function agregarZonaPrimaria {
-    param(
-        [string]$name,
-        [string]$rs
-    )
+    param([string]$name)
 
-    Add-DnsServerPrimaryZone -Name $name -ReplicationScope $rs -PassThru
+    Add-DnsServerPrimaryZone -Name $name -ReplicationScope "Forest" -PassThru
 }
 
 function agregarZonaSecundaria {
@@ -52,11 +49,21 @@ function eliminarZona {
     Remove-DnsServerZone -Name $name -Force 
 }
 
-function configuracionDNS {
+function configuracionZona {
     Write-Host " ------------------------ " -ForegroundColor $rosa
     Write-Host " Zonas existentes" -ForegroundColor $rosa
     Write-Host " ------------------------ " -ForegroundColor $rosa
-    Get-DnsServerZone   
+    Get-DnsServerZone  
+    
+    $opc = Read-Host "Desea agregar una zona? (y/n)"
+    if ($opc -eq "y") { 
+        $zn = Read-Host "Dame el nombre de la zona"
+        agregarRegistro -name $zn 
+    }
+    else {
+        Write-Host "Entendido, regresando..." -ForegroundColor $rosa
+        return
+    }
 }
 
 function instalacionDNS {
@@ -152,10 +159,10 @@ function mostrarMenu {
         "3" {
             $DNSEstado = Get-WindowsFeature -Name *DNS*
             if ($DNSEstado.InstallState -eq "Installed") {
-                configuracionDNS
+                configuracionZona
             }
             else {
-                Write-Host "DNS no esta instalado. Instálelo primero." -ForegroundColor $rojo
+                Write-Host "DNS no esta instalado. Instalelo primero." -ForegroundColor $rojo
             }
             Read-Host "`nPresiona Enter para continuar"
             mostrarMenu
@@ -169,7 +176,7 @@ function mostrarMenu {
                 agregarRegistro -name $n -zoneName $zn -ip $i
             }
             else {
-                Write-Host "DNS no esta instalado. Instálelo primero." -ForegroundColor $rojo
+                Write-Host "DNS no esta instalado. Instalelo primero." -ForegroundColor $rojo
             }
             Read-Host "`nPresiona Enter para continuar"
             mostrarMenu
