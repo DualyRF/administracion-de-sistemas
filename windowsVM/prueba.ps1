@@ -1,16 +1,14 @@
-$ipi = Read-Host "IP inicial"
-$ipf = Read-Host "IP final"
+function agregarRegistro {
+    param(
+        [string]$name,
+        [string]$zoneName,
+        [string]$ip
+    )
 
-## validacion para checar si la ip final es mayor q la ip inicial
-	
-	$ipicv = [int]($ipi -split'\.')[3]
-	$ipfcv = [int]($ipf -split'\.')[3]
+    Add-DNSServerResourceRecordA -Name $name -ZoneName $zoneName  -AllowUpdateAny -IPv4Address $ip
+}
 
-	if ($ipfcv -gt $ipicv) {
-		$validacion = $true
-		write-host "ip correcta"
-	}
-	else {
-		$validacion = $false
-		write-host "ip incorrecta"
-	}
+	$n = Read-Host"Dame el nombre del registro"
+	$zn = Read-Host"Dame el nombre de la zona"
+	$i = Read-Host"Dame la IP para la zona"
+	agregarRegistro -name $n, -zoneName $zn, -ip $i
