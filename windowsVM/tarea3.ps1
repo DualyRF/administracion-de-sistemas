@@ -22,6 +22,13 @@ function agregarZonaPrimaria {
     Add-DnsServerPrimaryZone -Name $name -ReplicationScope "Forest" -PassThru
 }
 
+function agregarZonaPrimaria2 {
+    param([string]$name, [string]$zoneFile)
+
+    Add-DnsServerPrimaryZone -Name $name -ZoneFile $zoneFile
+}
+
+
 function agregarZonaSecundaria {
     param(
         [string]$name,
@@ -65,8 +72,10 @@ function configuracionZona {
     
     $opc = Read-Host "Desea agregar una zona? (y/n)"
     if ($opc -eq "y") { 
-        $zn = Read-Host "Dame el nombre de la zona"
-        agregarRegistro -name $zn 
+        $n = Read-Host "Dame el nombre de la zona"
+        $n = Read-Host "Dame el nombre del archivo para la zona"
+
+        agregarZonaPrimaria2 -name $n -zoneFile $zf
     }
     else {
         Write-Host "Entendido, regresando..." -ForegroundColor $rosa
@@ -180,7 +189,7 @@ function mostrarMenu {
             if ($DNSEstado.InstallState -eq "Installed") {
                 $n = Read-Host "Dame el nombre del registro"
                 $zn = Read-Host "Dame el nombre de la zona"
-                $i = Read-Host "Dame la IP para la zona"
+                $i = Read-Host "Dame la IP para el registro"
                 agregarRegistro -name $n -zoneName $zn -ip $i
             }
             else {
