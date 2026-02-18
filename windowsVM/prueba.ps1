@@ -1,10 +1,9 @@
-$Old = Get-DnsServerResourceRecord -ZoneName "prueba.com" -Name "pruebaa" -RRType "A"
-$New = $Old.Clone()
-$New.RecordData.IPv4Address = [System.Net.IPAddress]::Parse("nueva.ip")
-Set-DnsServerResourceRecord -OldInputObject $Old -NewInputObject $New -ZoneName "prueba.com"
+Write-Host "Abriendo puerto 53 para consultas DNS..." -ForegroundColor Cyan
 
+# Esta regla abre el puerto 53 para TCP y UDP (ambos necesarios para DNS)
+New-NetFirewallRule -DisplayName "DNS-UDP-In" -Direction Inbound -LocalPort 53 -Protocol UDP -Action Allow -ErrorAction SilentlyContinue
+New-NetFirewallRule -DisplayName "DNS-TCP-In" -Direction Inbound -LocalPort 53 -Protocol TCP -Action Allow -ErrorAction SilentlyContinue
 
+Write-Host "Puerto 53 abierto." -ForegroundColor Green
 
-Import-CSV "C:PSNewDnsRecords.txt" | %{
-Add-DNSServerResourceRecordA -ZoneName woshub.com -Name $_."HostName" -IPv4Address $_."IPAddress"
-}
+Get-NetTCPConnection -LocalPort 53 -ErrorAction SilentlyContinue
