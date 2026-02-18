@@ -139,13 +139,14 @@ function configuracionDNS{
 function ValidarIPFija {
     # Obtenemos la interfaz principal (ignora Bluetooth y Loopback)
     # Buscamos específicamente el Ethernet 2 que es el de nuestra red interna
-    $interfaz = Get-NetAdapter | Where-Object { $_.Name -eq "Ethernet 2" }
-    $ipActual = Get-NetIPAddress -InterfaceAlias $interfaz.Name -AddressFamily IPv4
+    $interfaz = Get-NetAdapter | Where-Object { $_.Name -eq "Ethernet 2" -and $_.Status -eq "Up" }
 
-    # Si por alguna razón no lo encuentra, que use el primero que vea (como antes)
+    # Si por alguna razón el nombre es distinto, buscamos cualquiera que NO sea el de internet (opcional)
     if ($null -eq $interfaz) {
         $interfaz = Get-NetAdapter | Where-Object { $_.Status -eq "Up" -and $_.Name -notlike "*Bluetooth*" } | Select-Object -First 1
     }
+
+    $ipActual = Get-NetIPAddress -InterfaceAlias $interfaz.Name -AddressFamily IPv4 | Select-Object -First 1
 
     if ($ipActual.PrefixOrigin -eq "Dhcp") {
         Write-Host "IP Dinamica (DHCP) detectada." -ForegroundColor Yellow

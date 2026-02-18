@@ -16,5 +16,6 @@ Get-NetTCPConnection -LocalPort 53 -ErrorAction SilentlyContinue
 
 # Esto cambia la IP del Ethernet 2 a la .1
 Get-NetIPInterface -InterfaceAlias "Ethernet 2" | New-NetIPAddress -IPAddress 200.200.200.1 -PrefixLength 27 -DefaultGateway 200.200.200.1
+
 # Desactiva el firewall para que el ping y el DNS pasen sin problemas
 Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
