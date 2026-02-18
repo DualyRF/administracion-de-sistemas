@@ -28,3 +28,7 @@ New-NetIPAddress -InterfaceAlias "Ethernet 2" -IPAddress 200.200.200.1 -PrefixLe
 # Esto quita el DHCP y le regresa su identidad
 Set-NetIPInterface -InterfaceAlias "Ethernet 2" -DHCP Disabled
 Netsh interface ip set address name="Ethernet 2" static 200.200.200.1 255.255.255.224 200.200.200.1
+
+
+Disable-NetAdapter -Name "Ethernet" -Confirm:$false
+Enable-NetAdapter -Name "Ethernet"
