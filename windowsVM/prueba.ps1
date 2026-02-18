@@ -24,3 +24,7 @@ Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
 # Borramos cualquier IP previa del Ethernet 2 y ponemos la buena
 Remove-NetIPAddress -InterfaceAlias "Ethernet 2" -Confirm:$false -ErrorAction SilentlyContinue
 New-NetIPAddress -InterfaceAlias "Ethernet 2" -IPAddress 200.200.200.1 -PrefixLength 27 -DefaultGateway 200.200.200.1
+
+# Esto quita el DHCP y le regresa su identidad
+Set-NetIPInterface -InterfaceAlias "Ethernet 2" -DHCP Disabled
+Netsh interface ip set address name="Ethernet 2" static 200.200.200.1 255.255.255.224 200.200.200.1

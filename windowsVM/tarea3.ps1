@@ -132,7 +132,7 @@ function modificarRegistro{
         # 3. Reemplazar el viejo por el nuevo
         Set-DnsServerResourceRecord -OldInputObject $oldObj -NewInputObject $newObj -ZoneName $zn -ErrorAction Stop
         
-        Write-Host "Registro actualizado con éxito." -ForegroundColor Green
+        Write-Host "Registro actualizado con exito." -ForegroundColor Green
     }
     catch {
         Write-Host "Error al intentar editar: $($_.Exception.Message)" -ForegroundColor Red
@@ -171,7 +171,7 @@ function ValidarIPFija {
             Write-Host "IP configurada con exito" -ForegroundColor Green
         }
     } else {
-        Write-Host "Estado: IP Estática ya configurada ($($ipActual.IPAddress))." -ForegroundColor Green
+        Write-Host "Estado: IP Estatica ya configurada ($($ipActual.IPAddress))." -ForegroundColor Green
         Start-Sleep -Seconds 2 
     }
 }
