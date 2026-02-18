@@ -42,7 +42,6 @@ function agregarZonaPrimaria2 {
     }
 }
 
-
 function agregarZonaSecundaria {
     param(
         [string]$name,
@@ -137,6 +136,61 @@ function configuracionDNS{
     Get-DnsServer
 }
 
+function ValidarIPFija {
+    # Obtenemos la interfaz principal (ignora Bluetooth y Loopback)
+    $interfaz = Get-NetAdapter | Where-Object { $_.Status -eq "Up" -and $_.Name -notlike "*Bluetooth*" } | Select-Object -First 1
+    $ipActual = Get-NetIPAddress -InterfaceAlias $interfaz.Name -AddressFamily IPv4
+
+    if ($ipActual.PrefixOrigin -eq "Dhcp") {
+        Write-Host "Estado: IP Dinámica (DHCP) detectada." -ForegroundColor Yellow
+        $confirmar = Read-Host "Se detectó que no tiene IP fija, y se requiere tenerla. ¿Deseas configurarla ahora? (S/N)"
+        
+        if ($confirmar -eq "S") {
+            $nuevaIP = Read-Host "IP Estática (ej. 192.168.1.10)"
+            $prefijo = Read-Host "Máscara en prefijo (ej. 24)"
+            $gateway  = Read-Host "Puerta de enlace o gateway (ej. 192.168.1.1)"
+            
+            # Cambiamos de DHCP a Estática
+            # El parámetro -Confirm:$false evita que pida permiso por cada paso
+            New-NetIPAddress -InterfaceAlias $interfaz.Name -IPAddress $nuevaIP -PrefixLength $prefijo -DefaultGateway $gateway -Confirm:$false
+            
+            Write-Host "¡IP configurada con éxito!" -ForegroundColor Green
+        }
+    } else {
+        Write-Host "Estado: IP Estática ya configurada ($($ipActual.IPAddress))." -ForegroundColor Green
+    }
+}
+
+function configurarEscenario {
+    $dom =  Read-Host "Ingresa el nombre del dominio (Ej: reprobados.com)"
+    $ipDestino = Read-Host "Introduce la IP de la VM Cliente (donde apuntará el dominio)"
+    
+    # Crear zona (Idempotencia)
+    if (!(Get-DnsServerZone -Name $dom -ErrorAction SilentlyContinue)) {
+        Add-DnsServerPrimaryZone -Name $dom -ReplicationScope "Forest"
+    }
+
+    # Agregar registros A (Raíz y WWW.)
+    Add-DnsServerResourceRecordA -Name "@" -IPv4Address $ipDestino -ZoneName $dom -AllowUpdateAny -ErrorAction SilentlyContinue
+    Add-DnsServerResourceRecordA -Name "www" -IPv4Address $ipDestino -ZoneName $dom -AllowUpdateAny -ErrorAction SilentlyContinue
+    
+    Write-Host "Escenario configurado con éxito." -ForegroundColor $verde
+    puebasDNS -zona $dom
+}
+
+function pruebasDNS {
+    param([string]$zona)
+
+    Write-Host "1. Probando nslookup para $zona..." -ForegroundColor $amarillo
+    nslookup $zona 127.0.0.1
+    
+    Write-Host "`n2. Probando ping a www.$zona..." -ForegroundColor $amarillo
+    ping "www.$zona" -n 2
+    
+    Read-Host "`nPresiona Enter para finalizar las pruebas"
+}
+
+
 function verRegistroPorZonas{
     param([string]$name)
 
@@ -167,8 +221,8 @@ function configuracionZona {
     Write-Host "2. Ver registros por zona" 
     Write-Host "3. Agregar zona" 
     Write-Host "4. Agregar registro" 
-    Write-Host "5. Modificar registro" 
-    Write-Host "6. Eliminar registro"
+    Write-Host "5. Modificar registro"  
+    Write-Host "6. Eliminar registro"   
     Write-Host "7. Volver al menu principal" 
     Write-Host "----------------------------------" -ForegroundColor $amarillo
     
@@ -203,16 +257,11 @@ function configuracionZona {
         }
 
         "4" {
-            $DNSEstado = Get-WindowsFeature -Name *DNS*
-            if ($DNSEstado.InstallState -eq "Installed") {
                 $n = Read-Host "Dame el nombre del registro"
                 $zn = Read-Host "Dame el nombre de la zona"
                 $i = Read-Host "Dame la IP para el registro"
                 agregarRegistro -name $n -zoneName $zn -ip $i
-            }
-            else {
-                Write-Host "DNS no esta instalado. Instalelo primero." -ForegroundColor $rojo
-            }
+
             Read-Host "`nPresiona Enter para continuar"
             configuracionZona
         }
@@ -313,14 +362,16 @@ function verificarInstalacion {
 }
 
 function mostrarMenu {
+    ValidarIPFija
     Clear-Host
     Write-Host "----------------------------------" -ForegroundColor $azul
     Write-Host "   Menu  " -ForegroundColor $azul
     Write-Host "----------------------------------" -ForegroundColor $azul
-    Write-Host "1. Verificar Instalacion" 
+    Write-Host "1. Verificar Instalacion DNS" 
     Write-Host "2. Instalar DNS" 
-    Write-Host "3. Configuracion de zonas y registros"
-    Write-Host "4. Salir" 
+    Write-Host "3. Configuracion avanzada de zonas y registros"
+    Write-Host "4. Configurar dominios"
+    Write-Host "5. Salir" 
     Write-Host "----------------------------------" -ForegroundColor $azul
     
     $opcion = Read-Host "Selecciona una opcion"
@@ -348,6 +399,11 @@ function mostrarMenu {
             mostrarMenu
         }
         "4" {
+            configurarEscenario
+            Read-Host "`nPresiona Enter para continuar"
+            mostrarMenu
+        }
+        "5" {
             Write-Host "`nSaliendo..." -ForegroundColor $rosa
             exit
         }
