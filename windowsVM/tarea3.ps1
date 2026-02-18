@@ -138,23 +138,29 @@ function configuracionDNS{
 
 function ValidarIPFija {
     # Obtenemos la interfaz principal (ignora Bluetooth y Loopback)
-    $interfaz = Get-NetAdapter | Where-Object { $_.Status -eq "Up" -and $_.Name -notlike "*Bluetooth*" } | Select-Object -First 1
+    # Buscamos específicamente el Ethernet 2 que es el de nuestra red interna
+    $interfaz = Get-NetAdapter | Where-Object { $_.Name -eq "Ethernet 2" }
     $ipActual = Get-NetIPAddress -InterfaceAlias $interfaz.Name -AddressFamily IPv4
 
+    # Si por alguna razón no lo encuentra, que use el primero que vea (como antes)
+    if ($null -eq $interfaz) {
+        $interfaz = Get-NetAdapter | Where-Object { $_.Status -eq "Up" -and $_.Name -notlike "*Bluetooth*" } | Select-Object -First 1
+    }
+
     if ($ipActual.PrefixOrigin -eq "Dhcp") {
-        Write-Host "Estado: IP Dinámica (DHCP) detectada." -ForegroundColor Yellow
-        $confirmar = Read-Host "Se detectó que no tiene IP fija, y se requiere tenerla. ¿Deseas configurarla ahora? (S/N)"
+        Write-Host "IP Dinamica (DHCP) detectada." -ForegroundColor Yellow
+        $confirmar = Read-Host "Se detecto que no tiene IP fija, y se requiere tenerla. ¿Deseas configurarla ahora? (S/N)"
         
         if ($confirmar -eq "S") {
-            $nuevaIP = Read-Host "IP Estática (ej. 192.168.1.10)"
-            $prefijo = Read-Host "Máscara en prefijo (ej. 24)"
+            $nuevaIP = Read-Host "IP Estatica (ej. 192.168.1.10)"
+            $prefijo = Read-Host "Mascara en prefijo (ej. 24)"
             $gateway  = Read-Host "Puerta de enlace o gateway (ej. 192.168.1.1)"
             
             # Cambiamos de DHCP a Estática
             # El parámetro -Confirm:$false evita que pida permiso por cada paso
             New-NetIPAddress -InterfaceAlias $interfaz.Name -IPAddress $nuevaIP -PrefixLength $prefijo -DefaultGateway $gateway -Confirm:$false
             
-            Write-Host "¡IP configurada con éxito!" -ForegroundColor Green
+            Write-Host "IP configurada con exito" -ForegroundColor Green
         }
     } else {
         Write-Host "Estado: IP Estática ya configurada ($($ipActual.IPAddress))." -ForegroundColor Green
