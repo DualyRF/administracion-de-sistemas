@@ -19,3 +19,8 @@ Get-NetIPInterface -InterfaceAlias "Ethernet 2" | New-NetIPAddress -IPAddress 20
 
 # Desactiva el firewall para que el ping y el DNS pasen sin problemas
 Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
+
+
+# Borramos cualquier IP previa del Ethernet 2 y ponemos la buena
+Remove-NetIPAddress -InterfaceAlias "Ethernet 2" -Confirm:$false -ErrorAction SilentlyContinue
+New-NetIPAddress -InterfaceAlias "Ethernet 2" -IPAddress 200.200.200.1 -PrefixLength 27 -DefaultGateway 200.200.200.1
