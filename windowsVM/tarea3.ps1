@@ -148,7 +148,7 @@ function verZonas {
 function configuracionZona {
     Clear-Host
     Write-Host "----------------------------------" -ForegroundColor $amarillo
-    Write-Host "   Menu configuración de zona " -ForegroundColor $amarillo
+    Write-Host "   Menu configuracion de zona " -ForegroundColor $amarillo
     Write-Host "----------------------------------" -ForegroundColor $amarillo
     Write-Host "1. Ver zonas existentes" 
     Write-Host "2. Ver registros por zona" 
@@ -200,6 +200,11 @@ function configuracionZona {
             }
             Read-Host "`nPresiona Enter para continuar"
             configuracionZona
+        }
+
+        "5"{
+            Write-Host "`nSaliendo..." -ForegroundColor $rosa
+            return
         }
         
         default {
