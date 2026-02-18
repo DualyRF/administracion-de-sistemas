@@ -78,13 +78,20 @@ function actualizarRegistro{
 
 function eliminarZona {
     param([string]$name)
+    $cf = Read-Host "Deseas eliminar la zona '$name'? (S/N)"
 
-    try {
-        Remove-DnsServerZone -Name $name -Force -ErrorAction Stop
-        Write-Host "La zona '$name' se ha eliminado correctamente." -ForegroundColor $verde
+    if ($cf -match '^[Ss]$'){
+        try {
+            Remove-DnsServerZone -Name $name -Force -ErrorAction Stop
+            Write-Host "La zona '$name' se ha eliminado correctamente." -ForegroundColor $verde
+        }
+        catch {
+            Write-Host "No se pudo eliminar la zona. Detalles: $($_.Exception.Message)" -ForegroundColor $rojo
+        }
     }
-    catch {
-        Write-Host "No se pudo eliminar la zona. Detalles: $($_.Exception.Message)" -ForegroundColor $rojo
+    else {
+        Write-Host "Entendido, regresando..." -ForegroundColor $rosa
+        return
     }
 }
 
@@ -165,6 +172,7 @@ function ValidarIPFija {
         }
     } else {
         Write-Host "Estado: IP Estática ya configurada ($($ipActual.IPAddress))." -ForegroundColor Green
+        Start-Sleep -Seconds 2 
     }
 }
 
@@ -241,8 +249,9 @@ function configuracionZona {
     Write-Host "3. Agregar zona" 
     Write-Host "4. Agregar registro" 
     Write-Host "5. Modificar registro"  
-    Write-Host "6. Eliminar registro"   
-    Write-Host "7. Volver al menu principal" 
+    Write-Host "6. Eliminar registro"
+    Write-Host "7. Eliminar zona"   
+    Write-Host "8. Volver al menu principal" 
     Write-Host "----------------------------------" -ForegroundColor $amarillo
     
     $opc = Read-Host "Selecciona una opcion"
@@ -293,15 +302,24 @@ function configuracionZona {
             $nip = Read-Host "Dame la nueva IP para el registro"
 
             modificarRegistro -zn $zn -nomViejo $n -nomNuevo $nn -nvIP $nip
+            configuracionZona
         }
 
         "6"{
             $n = Read-Host "Dame el nombre del registro a eliminar"
             $z = Read-Host "Dame el nombre de la zona del registro a eliminar"
             eliminarRegistro -name $n -zoneName $z
+            configuracionZona
         }
 
-        "7"{
+        "7" {
+            $n = Read-Host "Dame el nombre de la zona a eliminar"
+            eliminarZona -name $n
+            Read-Host "`nPresiona Enter para continuar"
+            configuracionZona 
+        }
+
+        "8"{
             Write-Host "`nSaliendo..." -ForegroundColor $rosa
             return
         }
