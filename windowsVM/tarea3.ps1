@@ -165,17 +165,16 @@ function configurarEscenario {
     $dom =  Read-Host "Ingresa el nombre del dominio (Ej: reprobados.com)"
     $ipDestino = Read-Host "Introduce la IP de la VM Cliente (donde apuntará el dominio)"
     
-    # Crear zona (Idempotencia)
     if (!(Get-DnsServerZone -Name $dom -ErrorAction SilentlyContinue)) {
         Add-DnsServerPrimaryZone -Name $dom -ReplicationScope "Forest"
     }
 
-    # Agregar registros A (Raíz y WWW.)
+    # registros A (Raíz y WWW.)
     Add-DnsServerResourceRecordA -Name "@" -IPv4Address $ipDestino -ZoneName $dom -AllowUpdateAny -ErrorAction SilentlyContinue
     Add-DnsServerResourceRecordA -Name "www" -IPv4Address $ipDestino -ZoneName $dom -AllowUpdateAny -ErrorAction SilentlyContinue
     
     Write-Host "Escenario configurado con éxito." -ForegroundColor $verde
-    puebasDNS -zona $dom
+    pruebasDNS -zona $dom
 }
 
 function pruebasDNS {
@@ -371,7 +370,8 @@ function mostrarMenu {
     Write-Host "2. Instalar DNS" 
     Write-Host "3. Configuracion avanzada de zonas y registros"
     Write-Host "4. Configurar dominios"
-    Write-Host "5. Salir" 
+    Write-Host "5. Realizar pruebas DNS" 
+    Write-Host "6. Salir" 
     Write-Host "----------------------------------" -ForegroundColor $azul
     
     $opcion = Read-Host "Selecciona una opcion"
@@ -404,6 +404,12 @@ function mostrarMenu {
             mostrarMenu
         }
         "5" {
+            $dom =  Read-Host "Ingresa el nombre del dominio (Ej: reprobados.com)"
+            pruebasDNS -zona $dom
+            Read-Host "`nPresiona Enter para continuar"
+            mostrarMenu
+        }
+        "6" {
             Write-Host "`nSaliendo..." -ForegroundColor $rosa
             exit
         }
