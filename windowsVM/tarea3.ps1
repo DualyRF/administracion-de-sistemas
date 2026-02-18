@@ -170,18 +170,18 @@ function ValidarIPFija {
 
 function configurarEscenario {
     $dom =  Read-Host "Ingresa el nombre del dominio (Ej: reprobados.com)"
-    $ipDestino = Read-Host "Introduce la IP a la que apuntará"
+    $ipDestino = Read-Host "Introduce la IP a la que apuntará (200.200.200.x)"
     $ipServidor = "200.200.200.1" 
     
     try {
         # Creamos la zona como un archivo simple (.dns), no integrada en el Forest
-        Add-DnsServerPrimaryZone -Name $dom -ZoneFile "$dom.dns" -ErrorAction Stop
+        Add-DnsServerPrimaryZone -Name $dom -ZoneFile "$dom.dns" -ErrorAction Stop 
         
         # Agregamos el registro para el dominio raíz (@) y para www
-        Add-DnsServerResourceRecordA -Name "@" -ZoneName $dom -IPv4Address $ipServidor -ErrorAction Stop
-        Add-DnsServerResourceRecordA -Name "www" -ZoneName $dom -IPv4Address $ipServidor -ErrorAction Stop
+        Add-DnsServerResourceRecordA -Name "@" -ZoneName $dom -IPv4Address $ipDestino -ErrorAction Stop
+        Add-DnsServerResourceRecordA -Name "www" -ZoneName $dom -IPv4Address $ipDestino -ErrorAction Stop
         
-        Write-Host "Dominio $dom configurado con éxito apuntando a $ipServidor" -ForegroundColor Green
+        Write-Host "Dominio $dom configurado con éxito apuntando a $ipDestino" -ForegroundColor Green
         
         pr = Read-Host "Deseas hacer una prueba? (S/N)"
         if ($pr -match '^[Ss]$'){
