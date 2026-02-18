@@ -1,14 +1,4 @@
-function agregarRegistro {
-    param(
-        [string]$name,
-        [string]$zoneName,
-        [string]$ip
-    )
-
-    Add-DNSServerResourceRecordA -Name $name -ZoneName $zoneName  -AllowUpdateAny -IPv4Address $ip
-}
-
-	$n = Read-Host "Dame el nombre del registro"
-	$zn = Read-Host "Dame el nombre de la zona"
-	$i = Read-Host "Dame la IP para la zona"
-	agregarRegistro -name $n, -zoneName $zn, -ip $i
+$Old = Get-DnsServerResourceRecord -ZoneName "zona.com" -Name "nombre" -RRType "A"
+$New = $Old.Clone()
+$New.RecordData.IPv4Address = [System.Net.IPAddress]::Parse("nueva.ip")
+Set-DnsServerResourceRecord -OldInputObject $Old -NewInputObject $New -ZoneName "zona.com"   

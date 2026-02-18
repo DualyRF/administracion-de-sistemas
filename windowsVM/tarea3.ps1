@@ -106,6 +106,20 @@ function eliminarRegistro {
       
 }
 
+function modificarRegistro{
+    param(
+        [string]$nr,
+        [string]$nz
+    )
+
+    # No se puede cambiar el nombre o tipo del registro. Para eso, debe eliminarse y crearse uno nuevo. 
+    $registroViejo = Get-DnsServerResourceRecord -Name $nr -ZoneName $nz -RRType "A"   
+    $registroNuevo = [ciminstance]::new($registroViejo)
+    $registroNuevo.RecordData.IPv4Address = [System.Net.IPAddress]::Parse("nueva_ip")
+
+    Set-DnsServerResourceRecord -OldInputObject $registroViejo -NewInputObject $registroNuevo -ZoneName $nz -PassThru      
+}
+
 function configuracionDNS{
     Get-DnsServer
 }
@@ -117,7 +131,7 @@ function verRegistroPorZonas{
         Write-Host " ------------------------ " -BackgroundColor $rosa -ForegroundColor White
         Write-Host " Registros existentes" -BackgroundColor $rosa -ForegroundColor White
         Write-Host " ------------------------ " -BackgroundColor $rosa -ForegroundColor White
-        Get-DnsServerResourceRecord -ZoneName "prueba.com"  -ErrorAction Stop
+        Get-DnsServerResourceRecord -ZoneName $name -RRType "A"  -ErrorAction Stop | Format-Table -AutoSize
     }
     catch {
         Write-Host "La zona '$name' no tiene registros." -ForegroundColor $rojo
@@ -148,12 +162,14 @@ function configuracionZona {
         "1" {
             verZonas
             Read-Host "`nPresiona Enter para continuar"
+            configuracionZona
         }
 
         "2" {
             $zn = Read-Host "Dame el nombre de la zona"
             verRegistroPorZonas -name $zn
             Read-Host "`nPresiona Enter para continuar"
+            configuracionZona
         }
 
         "3" {
