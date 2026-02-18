@@ -155,7 +155,7 @@ function ValidarIPFija {
 
     $ipActual = Get-NetIPAddress -InterfaceAlias $interfaz.Name -AddressFamily IPv4 | Select-Object -First 1
 
-    if ($ipActual.PrefixOrigin -eq "Dhcp") {
+    if ($ipActual.PrefixOrigin -eq "Dhcp" -or $ipActual.IPAddress -like "169.254.*") {
         Write-Host "IP Dinamica (DHCP) detectada." -ForegroundColor Yellow
         $confirmar = Read-Host "Se detecto que no tiene IP fija, y se requiere tenerla. ¿Deseas configurarla ahora? (S/N)"
         
@@ -172,7 +172,7 @@ function ValidarIPFija {
         }
     } else {
         Write-Host "Estado: IP Estatica ya configurada ($($ipActual.IPAddress))." -ForegroundColor Green
-        Start-Sleep -Seconds 2 
+        Start-Sleep -Seconds 4 
     }
 }
 
