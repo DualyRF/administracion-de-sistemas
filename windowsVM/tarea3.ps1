@@ -108,16 +108,29 @@ function eliminarRegistro {
 
 function modificarRegistro{
     param(
-        [string]$nr,
-        [string]$nz
+        [string]$zn,
+        [string]$nomViejo,
+        [string]$nomNuevo,
+        [string]$nvIP
     )
 
-    # No se puede cambiar el nombre o tipo del registro. Para eso, debe eliminarse y crearse uno nuevo. 
-    $registroViejo = Get-DnsServerResourceRecord -Name $nr -ZoneName $nz -RRType "A"   
-    $registroNuevo = [ciminstance]::new($registroViejo)
-    $registroNuevo.RecordData.IPv4Address = [System.Net.IPAddress]::Parse("nueva_ip")
-
-    Set-DnsServerResourceRecord -OldInputObject $registroViejo -NewInputObject $registroNuevo -ZoneName $nz -PassThru      
+    try {
+        # 1. Obtener el registro actual
+        $oldObj = Get-DnsServerResourceRecord -Name $nomViejo -ZoneName $zn -RRType "A" -ErrorAction Stop
+        
+        # 2. Crear una copia con los datos nuevos
+        $newObj = $oldObj.Clone()
+        $newObj.HostName = $nomNuevo
+        $newObj.RecordData.IPv4Address = [System.Net.IPAddress]::Parse($nvIP)
+        
+        # 3. Reemplazar el viejo por el nuevo
+        Set-DnsServerResourceRecord -OldInputObject $oldObj -NewInputObject $newObj -ZoneName $zn -ErrorAction Stop
+        
+        Write-Host "Registro actualizado con éxito." -ForegroundColor Green
+    }
+    catch {
+        Write-Host "Error al intentar editar: $($_.Exception.Message)" -ForegroundColor Red
+    }
 }
 
 function configuracionDNS{
@@ -154,7 +167,9 @@ function configuracionZona {
     Write-Host "2. Ver registros por zona" 
     Write-Host "3. Agregar zona" 
     Write-Host "4. Agregar registro" 
-    Write-Host "5. Volver al menu principal" 
+    Write-Host "5. Modificar registro" 
+    Write-Host "6. Eliminar registro"
+    Write-Host "7. Volver al menu principal" 
     Write-Host "----------------------------------" -ForegroundColor $amarillo
     
     $opc = Read-Host "Selecciona una opcion"
@@ -203,6 +218,22 @@ function configuracionZona {
         }
 
         "5"{
+            $n = Read-Host "Dame el nombre actual del registro"
+            $zn = Read-Host "Dame el nombre de la zona"
+            
+            $nn = Read-Host "Dame el nuevo nombre para el registro"
+            $nip = Read-Host "Dame la nueva IP para el registro"
+
+            modificarRegistro -zn $zn -nomViejo $n -nomNuevo $nn -nvIP $nip
+        }
+
+        "6"{
+            $n = Read-Host "Dame el nombre del registro a eliminar"
+            $z = Read-Host "Dame el nombre de la zona del registro a eliminar"
+            eliminarRegistro -name $n -zoneName $z
+        }
+
+        "7"{
             Write-Host "`nSaliendo..." -ForegroundColor $rosa
             return
         }
