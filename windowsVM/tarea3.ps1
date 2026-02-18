@@ -163,18 +163,31 @@ function ValidarIPFija {
 
 function configurarEscenario {
     $dom =  Read-Host "Ingresa el nombre del dominio (Ej: reprobados.com)"
-    $ipDestino = Read-Host "Introduce la IP de la VM Cliente (donde apuntará el dominio)"
+    $ipDestino = Read-Host "Introduce la IP a la que apuntará"
     
-    if (!(Get-DnsServerZone -Name $dom -ErrorAction SilentlyContinue)) {
-        Add-DnsServerPrimaryZone -Name $dom -ReplicationScope "Forest"
+    try {
+        # Creamos la zona como un archivo simple (.dns), no integrada en el Forest
+        Add-DnsServerPrimaryZone -Name $dom -ZoneFile "$dom.dns" -ErrorAction Stop
+        
+        # Agregamos el registro para el dominio raíz (@) y para www
+        Add-DnsServerResourceRecordA -Name "@" -ZoneName $dom -IPv4Address $ipDestino -ErrorAction Stop
+        Add-DnsServerResourceRecordA -Name "www" -ZoneName $dom -IPv4Address $ipDestino -ErrorAction Stop
+        
+        Write-Host "Dominio $dom configurado con éxito apuntando a $ipDestino" -ForegroundColor Green
+        
+        pr = Read-Host "Deseas hacer una prueba? (S/N)"
+        if ($pr -match '^[Ss]$'){
+            Write-Host "Iniciando prueba..." -ForegroundColor $rosa
+            pruebasDNS -zona $dom
+        }
+        else {
+            Write-Host "Entendido, regresando..." -ForegroundColor $rosa
+            return
+        }
     }
-
-    # registros A (Raíz y WWW.)
-    Add-DnsServerResourceRecordA -Name "@" -IPv4Address $ipDestino -ZoneName $dom -AllowUpdateAny -ErrorAction SilentlyContinue
-    Add-DnsServerResourceRecordA -Name "www" -IPv4Address $ipDestino -ZoneName $dom -AllowUpdateAny -ErrorAction SilentlyContinue
-    
-    Write-Host "Escenario configurado con éxito." -ForegroundColor $verde
-    pruebasDNS -zona $dom
+    catch {
+        Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
+    }
 }
 
 function pruebasDNS {
@@ -188,7 +201,6 @@ function pruebasDNS {
     
     Read-Host "`nPresiona Enter para finalizar las pruebas"
 }
-
 
 function verRegistroPorZonas{
     param([string]$name)
@@ -241,8 +253,8 @@ function configuracionZona {
         }
 
         "3" {
-            $opc = Read-Host "Desea agregar una zona? (y/n)"
-            if ($opc -eq "y") { 
+            $opc = Read-Host "Desea agregar una zona? (s/n)"
+            if ($opc -eq "s") { 
                 $n = Read-Host "Dame el nombre de la zona"
                 # Esto toma el nombre y le pega ".dns" al final automáticamente
                 $zf = "$n.dns"
@@ -311,7 +323,7 @@ function instalacionDNS {
         
         try {
             $job = Start-Job -ScriptBlock {
-                Install-WindowsFeature -Name DNS -includeManagementTools
+                Install-WindowsFeature -Name DNS -IncludeManagementTools
             }
             
             Write-Host -NoNewline "DNS se esta instalando"
