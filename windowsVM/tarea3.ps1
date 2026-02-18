@@ -110,30 +110,89 @@ function configuracionDNS{
     Get-DnsServer
 }
 
+function verRegistroPorZonas{
+    param([string]$name)
+
+    try {
+        Write-Host " ------------------------ " -BackgroundColor $rosa -ForegroundColor White
+        Write-Host " Registros existentes" -BackgroundColor $rosa -ForegroundColor White
+        Write-Host " ------------------------ " -BackgroundColor $rosa -ForegroundColor White
+        Get-DnsServerResourceRecord -ZoneName "prueba.com"  -ErrorAction Stop
+    }
+    catch {
+        Write-Host "La zona '$name' no tiene registros." -ForegroundColor $rojo
+    }
+}
+
+function verZonas {
+    Write-Host " ------------------------ " -BackgroundColor White -ForegroundColor $rosa 
+    Write-Host " Zonas existentes" -BackgroundColor White -ForegroundColor $rosa
+    Write-Host " ------------------------ " -BackgroundColor White -ForegroundColor $rosa
+    Get-DnsServerZone   
+}
+
 function configuracionZona {
-    Write-Host " ------------------------ " -ForegroundColor $rosa
-    Write-Host " Zonas existentes" -ForegroundColor $rosa
-    Write-Host " ------------------------ " -ForegroundColor $rosa
-    Get-DnsServerZone  
+    Clear-Host
+    Write-Host "----------------------------------" -ForegroundColor $amarillo
+    Write-Host "   Menu configuración de zona " -ForegroundColor $amarillo
+    Write-Host "----------------------------------" -ForegroundColor $amarillo
+    Write-Host "1. Ver zonas existentes" 
+    Write-Host "2. Ver registros por zona" 
+    Write-Host "3. Agregar zona" 
+    Write-Host "4. Agregar registro" 
+    Write-Host "5. Volver al menu principal" 
+    Write-Host "----------------------------------" -ForegroundColor $amarillo
     
-    Write-Host " ------------------------ " -BackgroundColor $rosa -ForegroundColor White
-    Write-Host " Registros existentes" -BackgroundColor $rosa -ForegroundColor White
-    Write-Host " ------------------------ " -BackgroundColor $rosa -ForegroundColor White
-    Get-DnsServerResourceRecord
+    $opc = Read-Host "Selecciona una opcion"
+    switch ($opc) {
+        "1" {
+            verZonas
+            Read-Host "`nPresiona Enter para continuar"
+        }
 
+        "2" {
+            $zn = Read-Host "Dame el nombre de la zona"
+            verRegistroPorZonas -name $zn
+            Read-Host "`nPresiona Enter para continuar"
+        }
 
-    $opc = Read-Host "Desea agregar una zona? (y/n)"
-    if ($opc -eq "y") { 
-        $n = Read-Host "Dame el nombre de la zona"
-        # Esto toma el nombre y le pega ".dns" al final automáticamente
-        $zf = "$n.dns"
+        "3" {
+            $opc = Read-Host "Desea agregar una zona? (y/n)"
+            if ($opc -eq "y") { 
+                $n = Read-Host "Dame el nombre de la zona"
+                # Esto toma el nombre y le pega ".dns" al final automáticamente
+                $zf = "$n.dns"
 
-        agregarZonaPrimaria2 -name $n -zoneFile $zf
+                agregarZonaPrimaria2 -name $n -zoneFile $zf
+            }
+            else {
+                Write-Host "Entendido, regresando..." -ForegroundColor $rosa
+                configuracionZona
+            }
+        }
+
+        "4" {
+            $DNSEstado = Get-WindowsFeature -Name *DNS*
+            if ($DNSEstado.InstallState -eq "Installed") {
+                $n = Read-Host "Dame el nombre del registro"
+                $zn = Read-Host "Dame el nombre de la zona"
+                $i = Read-Host "Dame la IP para el registro"
+                agregarRegistro -name $n -zoneName $zn -ip $i
+            }
+            else {
+                Write-Host "DNS no esta instalado. Instalelo primero." -ForegroundColor $rojo
+            }
+            Read-Host "`nPresiona Enter para continuar"
+            configuracionZona
+        }
+        
+        default {
+            Write-Host "Opcion no valida" -ForegroundColor $rojo
+            Start-Sleep -Seconds 1
+            configuracionZona
+        }
     }
-    else {
-        Write-Host "Entendido, regresando..." -ForegroundColor $rosa
-        return
-    }
+
 }
 
 function instalacionDNS {
@@ -208,9 +267,8 @@ function mostrarMenu {
     Write-Host "----------------------------------" -ForegroundColor $azul
     Write-Host "1. Verificar Instalacion" 
     Write-Host "2. Instalar DNS" 
-    Write-Host "3. Configurar zona y registros"
-    Write-Host "4. Agregar Registro" 
-    Write-Host "5. Salir" 
+    Write-Host "3. Configuracion de zonas y registros"
+    Write-Host "4. Salir" 
     Write-Host "----------------------------------" -ForegroundColor $azul
     
     $opcion = Read-Host "Selecciona una opcion"
@@ -238,20 +296,6 @@ function mostrarMenu {
             mostrarMenu
         }
         "4" {
-            $DNSEstado = Get-WindowsFeature -Name *DNS*
-            if ($DNSEstado.InstallState -eq "Installed") {
-                $n = Read-Host "Dame el nombre del registro"
-                $zn = Read-Host "Dame el nombre de la zona"
-                $i = Read-Host "Dame la IP para el registro"
-                agregarRegistro -name $n -zoneName $zn -ip $i
-            }
-            else {
-                Write-Host "DNS no esta instalado. Instalelo primero." -ForegroundColor $rojo
-            }
-            Read-Host "`nPresiona Enter para continuar"
-            mostrarMenu
-        }
-        "5" {
             Write-Host "`nSaliendo..." -ForegroundColor $rosa
             exit
         }
@@ -264,21 +308,4 @@ function mostrarMenu {
 }
 
 # ---------- Main ----------
-param(
-    [switch]$v,
-    [switch]$i,
-    [switch]$c
-)
-
-if ($v) {
-    verificar_Instalacion
-}
-elseif ($i) {
-    instalacionDHCP
-}
-elseif ($c) {
-    configuracionDHCP
-}
-else {
-    mostrarMenu
-}
+mostrarMenu
