@@ -154,7 +154,7 @@ configurar_ip_estatica() {
         fi
     fi
     
-    print_success "Interfaz detectada: $interfaz"
+    print_success "Interfaz: $interfaz"
     
     # 2. Ruta del archivo de configuración
     local ifcfg="/etc/sysconfig/network/ifcfg-$interfaz"
