@@ -220,7 +220,7 @@ EOF
             print_warning "No se pudo hacer ping al gateway, verifique la configuración"
         fi
         
-        print_success "IP estática configurada: $server_ip"
+        print_success "IP estática actual: $server_ip"
         export server_ip
         return 0
     fi
