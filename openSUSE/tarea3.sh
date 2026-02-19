@@ -1,11 +1,10 @@
 #!/bin/bash
 
 # ----------Colores para que sea mas intuitivo ----------
-rojo='\033[0;31m'
-amarillo='\033[1;33m'
-verde='\033[0;32m'
+rojo='\033[0;95m'  
+amarillo='\033[1;93m'
+verde='\033[0;96m'
 azul='\033[1;34m'
-cyan='\033[0;36m'
 nc='\033[0m'
 
 # Variables globales
@@ -29,10 +28,10 @@ EVIDENCE_FILE="/tmp/dns-test-evidence-$(date +%Y%m%d-%H%M%S).log"
 ayuda() {
     echo "Uso del script: $0"
     echo "Opciones:"
-    echo -e "  ${azul}-v, --verify       ${nc}Verifica si esta instalado BIND9"
-    echo -e "  ${azul}-i, --install      ${nc}Instala y configura BIND9"
-    echo -e "  ${azul}-m, --monitor      ${nc}Monitorear servidor DNS"
-    echo -e "  ${azul}-r, --restart      ${nc}Reiniciar servidor DNS"
+    echo -e "  ${azul}-vr, --verify       ${nc}Verifica si esta instalado BIND9"
+    echo -e "  ${azul}-in, --install      ${nc}Instala y configura BIND9"
+    echo -e "  ${azul}-mn, --monitor      ${nc}Monitorear servidor DNS"
+    echo -e "  ${azul}-r, --restart     ${nc}Reiniciar servidor DNS"
     echo -e "  ${azul}-?, --help         ${nc}Muestra esta ayuda"
 }
 
@@ -135,9 +134,9 @@ verificar_Instalacion() {
 # ---------- Configurar IP estática ----------
 
 configurar_ip_estatica() {
-    print_info "═══════════════════════════════════════"
-    print_info "  Verificación de IP Estática"
-    print_info "═══════════════════════════════════════"
+    print_info "-----------------------------------------"
+    print_info "  Verificando si tiene una IP estática"
+    print_info "-----------------------------------------"
     
     # 1. Detectar interfaz activa
     local interfaz=$(ip route | grep default | awk '{print $5}' | head -1)
@@ -504,7 +503,7 @@ reiniciar_DNS() {
 # ---------- Menú de Monitoreo ----------
 
 agregar_dominio() {
-    print_info "═══ Agregar Dominio ═══"
+    print_info "Agregar Dominio "
 
     # Pedir nombre del dominio
     echo -ne "${azul}Ingrese el nombre del dominio (ej: reprobados.com): ${nc}"
@@ -726,17 +725,17 @@ monitoreo() {
     while true; do
         echo ""
         echo -e "${cyan}"
-        echo "╔════════════════════════════════════════════════════════════╗"
-        echo "║              Menú de Monitoreo DNS                        ║"
-        echo "╚════════════════════════════════════════════════════════════╝"
+        echo "--------------------------------------------------"
+        echo " Menú Principal "
+        echo "--------------------------------------------------"
         echo -e "${nc}"
 
         echo -e "  ${verde}1)${nc} Agregar dominio"
-        echo -e "  ${rojo}2)${nc} Eliminar dominio"
-        echo -e "  ${azul}3)${nc} Listar dominios"
+        echo -e "  ${rojo}2)${nc} Borrar dominio"
+        echo -e "  ${azul}3)${nc} Ver dominios"
         echo -e "  ${amarillo}0)${nc} Salir"
         echo ""
-        echo -ne "Opcion: "
+        echo -ne "Elija su respuesta: "
         read -r opcion
 
         case $opcion in
@@ -756,9 +755,9 @@ monitoreo() {
 
 # ---------- Main ----------
 case $1 in
-    -v | --verify)   verificar_Instalacion ;;
-    -i | --install)  install_bind9 ;;
-    -m | --monitor)  monitoreo ;;
+    -vr | --verify)   verificar_Instalacion ;;
+    -in | --install)  install_bind9 ;;
+    -mn | --monitor)  monitoreo ;;
     -r | --restart)  reiniciar_DNS ;;
     -? | --help)     ayuda ;;
     *)               ayuda ;;
