@@ -306,7 +306,7 @@ EOF
             print_warning "No se pudo hacer ping al gateway"
         fi
         
-        print_success "IP estática configurada: $server_ip"
+        print_success "IP estática actual: $server_ip"
         export server_ip
     fi
 }
@@ -321,9 +321,9 @@ install_bind9() {
     }
     
     echo ""
-    print_info "═══════════════════════════════════════"
+    print_info "----------------------------------------"
     print_info "  Instalación de BIND9"
-    print_info "═══════════════════════════════════════"
+    print_info "----------------------------------------"
     
     if verificar_Instalacion; then
         print_info "BIND9 ya está instalado"
