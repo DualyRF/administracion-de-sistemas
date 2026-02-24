@@ -6,6 +6,7 @@ New-NetFirewallRule -DisplayName "DNS-TCP-In" -Direction Inbound -LocalPort 53 -
 
 Write-Host "Puerto 53 abierto." -ForegroundColor Green
 
+#activar el puerto 53
 Get-NetTCPConnection -LocalPort 53 -ErrorAction SilentlyContinue
 
 # copy para regresar la configuracion de red a dhcp para poder usar git
