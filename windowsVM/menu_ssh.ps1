@@ -1,4 +1,4 @@
-# Importar las funciones de archivos externos (Modularización)
+# Importar las funciones de archivos externos
 . ".\funcionesSSH.ps1"
 . ".\tarea3.ps1"
 . ".\tarea2dhcp.ps1"
@@ -6,7 +6,7 @@
 Clear-Host
 verNiveldeAcceso
 
-# Validar que sea administrador antes de iniciar
+# Validar que sea administrador
 if (-not (admin)) {
     Write-Error "Este script debe ejecutarse como Administrador."
     exit
@@ -27,7 +27,7 @@ do {
 
     switch ($opcion) {
         "1" { 
-            Install-SSHServer 
+            instalarSSH 
             Pause
         }
         "2" { 
@@ -36,7 +36,6 @@ do {
             Pause
         }
         "3" { 
-            # Lógica de DNS
             Write-Host "Ejecutando configuración DNS..."
             mostrarMenuDNS
             Pause
