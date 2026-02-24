@@ -42,7 +42,7 @@ do {
             Pause
         }
         "4" { 
-            Write-Host "Saliendo..." -ForegroundColor Magent
+            Write-Host "Saliendo..." -ForegroundColor Magenta
             break 
         }
         Default { 
