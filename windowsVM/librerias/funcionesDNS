@@ -1,0 +1,139 @@
+function ValidarIPFija {
+    # Obtenemos la interfaz principal (ignora Bluetooth y Loopback)
+    # Buscamos específicamente el Ethernet 2 que es el de nuestra red interna
+    $interfaz = Get-NetAdapter | Where-Object { $_.Name -eq "Ethernet 2" -and $_.Status -eq "Up" }
+
+    # Si por alguna razón el nombre es distinto, buscamos cualquiera que NO sea el de internet (opcional)
+    if ($null -eq $interfaz) {
+        $interfaz = Get-NetAdapter | Where-Object { $_.Status -eq "Up" -and $_.Name -notlike "*Bluetooth*" } | Select-Object -First 1
+    }
+
+    $ipActual = Get-NetIPAddress -InterfaceAlias $interfaz.Name -AddressFamily IPv4 | Select-Object -First 1
+
+    if ($ipActual.PrefixOrigin -eq "Dhcp" -or $ipActual.IPAddress -like "169.254.*") {
+        Write-Host "IP Dinamica (DHCP) detectada." -ForegroundColor Yellow
+        $confirmar = Read-Host "Se detecto que no tiene IP fija, y se requiere tenerla. ¿Deseas configurarla ahora? (S/N)"
+        
+        if ($confirmar -eq "S") {
+            $nuevaIP = Read-Host "IP Estatica (ej. 192.168.1.10)"
+            $prefijo = Read-Host "Mascara en prefijo (ej. 24)"
+            $gateway  = Read-Host "Puerta de enlace o gateway (ej. 192.168.1.1)"
+            
+            # Cambiamos de DHCP a Estática
+            # El parámetro -Confirm:$false evita que pida permiso por cada paso
+            New-NetIPAddress -InterfaceAlias $interfaz.Name -IPAddress $nuevaIP -PrefixLength $prefijo -DefaultGateway $gateway -Confirm:$false
+            
+            Write-Host "IP configurada con exito" -ForegroundColor Green
+        }
+    } else {
+        Write-Host "Estado: IP Estatica ya configurada ($($ipActual.IPAddress))." -ForegroundColor Green
+        Start-Sleep -Seconds 4 
+    }
+}
+
+function configurarEscenario {
+    $dom =  Read-Host "Ingresa el nombre del dominio (Ej: reprobados.com)"
+    $ipDestino = Read-Host "Introduce la IP a la que apuntara (200.200.200.x)"
+    $ipServidor = "200.200.200.1" 
+    
+    try {
+        # Creamos la zona como un archivo simple (.dns), no integrada en el Forest
+        Add-DnsServerPrimaryZone -Name $dom -ZoneFile "$dom.dns" -ErrorAction Stop 
+        
+        # Agregamos el registro para el dominio raíz (@) y para www
+        Add-DnsServerResourceRecordA -Name "@" -ZoneName $dom -IPv4Address $ipDestino -ErrorAction Stop
+        Add-DnsServerResourceRecordA -Name "www" -ZoneName $dom -IPv4Address $ipDestino -ErrorAction Stop
+        
+        Write-Host "Dominio $dom configurado con exito apuntando a $ipDestino" -ForegroundColor Green
+        
+        $pr = Read-Host "Deseas hacer una prueba? (S/N)"
+        if ($pr -match '^[Ss]$'){
+            Write-Host "Iniciando prueba..." -ForegroundColor $rosa
+            pruebasDNS -zona $dom
+        }
+        else {
+            Write-Host "Entendido, regresando..." -ForegroundColor $rosa
+            return
+        }
+    }
+    catch {
+        Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
+    }
+}
+
+function pruebasDNS {
+    param([string]$zona)
+
+    Write-Host "1. Probando nslookup para $zona..." -ForegroundColor $amarillo
+    nslookup $zona 127.0.0.1
+    
+    Write-Host "`n2. Probando ping a www.$zona..." -ForegroundColor $amarillo
+    ping "www.$zona" -n 2
+    
+    Read-Host "`nPresiona Enter para finalizar las pruebas"
+}
+
+function instalacionDNS {
+  Write-Host " ---------------------------- " -ForegroundColor $rosa
+  Write-Host "Instalacion de DNS Server" -ForegroundColor $rosa
+  Write-Host " ---------------------------- " -ForegroundColor $rosa
+    
+    # Verificar si ya está instalado
+    $dnsEstado = Get-WindowsFeature -Name *DNS*
+    
+    if ($DNSEstado.InstallState -eq "Installed") {
+        Write-Host "DNS server ya esta instalado" -ForegroundColor $azul
+    }
+    else {
+        Write-Host "DNS server no esta instalado, iniciando instalacion..." -ForegroundColor $amarillo
+        
+        try {
+            $job = Start-Job -ScriptBlock {
+                Install-WindowsFeature -Name DNS -IncludeManagementTools
+            }
+            
+            Write-Host -NoNewline "DNS se esta instalando"
+            while ($job.State -eq "Running") {
+                Write-Host -NoNewline "."
+                Start-Sleep -Milliseconds 500
+            }
+            
+            $result = Receive-Job -Job $job
+            Remove-Job -Job $job
+            
+            if ($result.Success) {
+                Write-Host "DNS server instalado correctamente" -ForegroundColor $verde
+                Get-WindowsFeature -Name *DNS*
+                Start-Sleep -Seconds 2
+            }
+            else {
+                Write-Host "Error en la instalacion de DNS" -ForegroundColor $rojo
+                return
+            }
+        }
+        catch {
+            Write-Host "Error durante la instalacion: $_" -ForegroundColor $rojo
+            return
+        }
+    }
+}
+
+function verificarInstalacion {
+    $DNSEstado = Get-WindowsFeature -Name *DNS*
+
+    if ($DNSEstado.InstallState -eq "Installed") {
+        Write-Host "DNS ya se encuentra instalado" -ForegroundColor $verde
+    }
+    else {
+        Write-Host "DNS no se encuentra instalado" -ForegroundColor $rojo
+        $opcc = Read-Host "`nDesea instalarlo? (S/N)"
+        
+        if ($opcc -match '^[Ss]$') {
+            instalacionDNS
+        }
+        else {
+            Write-Host "Entendido, regresando al menu..." -ForegroundColor $amarillo
+            Start-Sleep -Seconds 2
+        }
+    }
+}

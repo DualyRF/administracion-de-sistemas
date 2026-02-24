@@ -1,0 +1,199 @@
+function validar_IP {
+    param([string]$ip)
+
+    if ($ip -notmatch '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$') {
+        Write-Host "IP invalida: formato incorrecto, use X.X.X.X" -ForegroundColor $rojo
+        return $false
+    }
+
+    $oct = $ip -split '\.'
+    $a = [int]$oct[0]
+
+    foreach ($o in $oct) {
+        if ($o.Length -gt 1 -and $o.StartsWith("0")) {
+            Write-Host "IP invalida: no se permiten ceros a la izquierda" -ForegroundColor $rojo
+            return $false
+        }
+        if ([int]$o -lt 0 -or [int]$o -gt 255) {
+            Write-Host "IP invalida: cada octeto debe estar entre 0 y 255" -ForegroundColor $rojo
+            return $false
+        }
+    }
+
+    if ($ip -eq "0.0.0.0" -or $ip -eq "255.255.255.255") {
+        Write-Host "IP invalida: no puede ser 0.0.0.0 ni 255.255.255.255" -ForegroundColor $rojo
+        return $false
+    }
+
+    if ($a -eq 127) {
+        Write-Host "IP invalida: rango 127.x.x.x reservado para localhost" -ForegroundColor $rojo
+        return $false
+    }
+
+    if ($a -ge 224 -and $a -le 239) {
+        Write-Host "IP invalida: rango 224-239 reservado para multicast" -ForegroundColor $rojo
+        return $false
+    }
+
+    if ($a -ge 240 -and $a -lt 255) {
+        Write-Host "IP invalida: rango 240-254 reservado para usos experimentales" -ForegroundColor $rojo
+        return $false
+    }
+
+    return $true
+}
+
+function validar_Mascara {
+    param([string]$masc)
+
+    $mascarasValidas = @(
+        "255.0.0.0",       "255.128.0.0",    "255.192.0.0",    "255.224.0.0",
+        "255.240.0.0",     "255.248.0.0",    "255.252.0.0",    "255.254.0.0",
+        "255.255.0.0",     "255.255.128.0",  "255.255.192.0",  "255.255.224.0",
+        "255.255.240.0",   "255.255.248.0",  "255.255.252.0",  "255.255.254.0",
+        "255.255.255.0",   "255.255.255.128","255.255.255.192","255.255.255.224",
+        "255.255.255.240", "255.255.255.248","255.255.255.252"
+    )
+
+    if ($mascarasValidas -contains $masc) {
+        return $true
+    }
+
+    Write-Host "Mascara invalida" -ForegroundColor $rojo
+    return $false
+}
+
+function calcular_Rango {
+    param([string]$ip1, [string]$ip2)
+
+    $o1 = $ip1 -split '\.'
+    $o2 = $ip2 -split '\.'
+
+    $n1 = ([int]$o1[0] * 16777216) + ([int]$o1[1] * 65536) + ([int]$o1[2] * 256) + [int]$o1[3]
+    $n2 = ([int]$o2[0] * 16777216) + ([int]$o2[1] * 65536) + ([int]$o2[2] * 256) + [int]$o2[3]
+
+    return [Math]::Abs($n2 - $n1)
+}
+
+function calcular_Mascara {
+    param([string]$ipIni, [string]$ipFin)
+
+    $rango = calcular_Rango -ip1 $ipIni -ip2 $ipFin
+
+    if     ($rango -le 254)   { return "255.255.255.0"   }
+    elseif ($rango -le 510)   { return "255.255.254.0"   }
+    elseif ($rango -le 1022)  { return "255.255.252.0"   }
+    elseif ($rango -le 2046)  { return "255.255.248.0"   }
+    elseif ($rango -le 4094)  { return "255.255.240.0"   }
+    elseif ($rango -le 8190)  { return "255.255.224.0"   }
+    elseif ($rango -le 16382) { return "255.255.192.0"   }
+    elseif ($rango -le 32766) { return "255.255.128.0"   }
+    elseif ($rango -le 65534) { return "255.255.0.0"     }
+    else                      { return "255.0.0.0"       }
+}
+
+function calcular_Bits {
+    param([string]$masc)
+
+    $bits = 0
+    foreach ($o in ($masc -split '\.')) {
+        $n = [int]$o
+        while ($n -gt 0) {
+            if ($n -band 1) { $bits++ }
+            $n = $n -shr 1
+        }
+    }
+    return $bits
+}
+
+function validar_IPMascara {
+    param([string]$ipIni, [string]$ipFin, [string]$masc)
+
+    $oIni  = $ipIni -split '\.'
+    $oFin  = $ipFin -split '\.'
+    $oMasc = $masc  -split '\.'
+
+    $redIni = @()
+    $redFin = @()
+
+    for ($i = 0; $i -lt 4; $i++) {
+        $redIni += [int]$oIni[$i] -band [int]$oMasc[$i]
+        $redFin += [int]$oFin[$i] -band [int]$oMasc[$i]
+    }
+
+    if (($redIni -join '.') -eq ($redFin -join '.')) {
+        return $true
+    }
+
+    Write-Host "Las IPs no pertenecen a la misma red con esa mascara" -ForegroundColor $rojo
+    return $false
+}
+
+function configurar_IP_Estatica {
+    param([string]$ipServidor, [string]$mascara, [string]$gateway)
+
+    Write-Host "`n=== Configurando IP Estatica del Servidor ===" -ForegroundColor $amarillo
+    Write-Host "IP a asignar: $ipServidor" -ForegroundColor $verde
+
+    Write-Host "`nInterfaces disponibles:" -ForegroundColor $amarillo
+    Get-NetAdapter | Where-Object { $_.Status -eq "Up" } | Select-Object Name, InterfaceDescription | Format-Table -AutoSize
+
+    $interfaz = ""
+    do {
+        $interfaz = Read-Host "Nombre de la interfaz a usar"
+        if (-not (Get-NetAdapter -Name $interfaz -ErrorAction SilentlyContinue)) {
+            Write-Host "Interfaz no encontrada, intente de nuevo" -ForegroundColor $rojo
+            $interfaz = ""
+        }
+    } while ($interfaz -eq "")
+
+    $ifIndex   = (Get-NetAdapter -Name $interfaz).ifIndex
+    $prefixLen = calcular_Bits -masc $mascara
+
+    Write-Host "Eliminando configuracion IP anterior..." -ForegroundColor $amarillo
+    Get-NetIPAddress -InterfaceIndex $ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Remove-NetIPAddress -Confirm:$false -ErrorAction SilentlyContinue
+    Get-NetRoute -InterfaceIndex $ifIndex -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue |
+        Remove-NetRoute -Confirm:$false -ErrorAction SilentlyContinue
+
+    try {
+        New-NetIPAddress `
+            -InterfaceIndex $ifIndex `
+            -IPAddress      $ipServidor `
+            -PrefixLength   $prefixLen `
+            -AddressFamily  IPv4 `
+            -ErrorAction    Stop | Out-Null
+        Write-Host "IP $ipServidor/$prefixLen asignada correctamente" -ForegroundColor $verde
+    }
+    catch {
+        Write-Host "Error al asignar IP estatica: $_" -ForegroundColor $rojo
+        return $false
+    }
+
+    if ($gateway -ne "") {
+        try {
+            New-NetRoute `
+                -InterfaceIndex    $ifIndex `
+                -DestinationPrefix "0.0.0.0/0" `
+                -NextHop           $gateway `
+                -ErrorAction       Stop | Out-Null
+            Write-Host "Gateway $gateway configurado" -ForegroundColor $verde
+        }
+        catch {
+            Write-Host "Advertencia: no se pudo configurar el gateway: $_" -ForegroundColor $amarillo
+        }
+    }
+
+    Start-Sleep -Seconds 1
+    $verificacion = Get-NetIPAddress -InterfaceIndex $ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+                    Where-Object { $_.IPAddress -eq $ipServidor }
+
+    if ($verificacion) {
+        Write-Host "Verificacion exitosa - IP $ipServidor activa en $interfaz" -ForegroundColor $verde
+        return $true
+    }
+    else {
+        Write-Host "Advertencia: no se pudo verificar la IP asignada" -ForegroundColor $amarillo
+        return $false
+    }
+}

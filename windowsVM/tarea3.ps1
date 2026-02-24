@@ -398,7 +398,7 @@ function verificarInstalacion {
     }
 }
 
-function mostrarMenu {
+function mostrarMenuDNS {
     ValidarIPFija
     Clear-Host
     Write-Host "----------------------------------" -ForegroundColor $azul
@@ -418,12 +418,12 @@ function mostrarMenu {
         "1" {
             verificarInstalacion
             Read-Host "`nPresiona Enter para continuar"
-            mostrarMenu
+            mostrarMenuDNS
         }
         "2" {
             instalacionDNS
             Read-Host "`nPresiona Enter para continuar"
-            mostrarMenu
+            mostrarMenuDNS
         }
         "3" {
             $DNSEstado = Get-WindowsFeature -Name *DNS*
@@ -434,18 +434,18 @@ function mostrarMenu {
                 Write-Host "DNS no esta instalado. Instalelo primero." -ForegroundColor $rojo
             }
             Read-Host "`nPresiona Enter para continuar"
-            mostrarMenu
+            mostrarMenuDNS
         }
         "4" {
             configurarEscenario
             Read-Host "`nPresiona Enter para continuar"
-            mostrarMenu
+            mostrarMenuDNS
         }
         "5" {
             $dom =  Read-Host "Ingresa el nombre del dominio (Ej: reprobados.com)"
             pruebasDNS -zona $dom
             Read-Host "`nPresiona Enter para continuar"
-            mostrarMenu
+            mostrarMenuDNS
         }
         "6" {
             Write-Host "`nSaliendo..." -ForegroundColor $rosa
@@ -454,10 +454,10 @@ function mostrarMenu {
         default {
             Write-Host "Opcion no valida" -ForegroundColor $rojo
             Start-Sleep -Seconds 2
-            mostrarMenu
+            mostrarMenuDNS
         }
     }
 }
 
 # ---------- Main ----------
-mostrarMenu
+mostrarMenuDNS

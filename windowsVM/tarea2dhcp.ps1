@@ -641,7 +641,7 @@ function instalar_DHCP {
     configuracionDHCP
 }
 
-function mostrarMenu {
+function mostrarMenuDHCP {
     Clear-Host
     Write-Host "=====================================" -ForegroundColor $azul
     Write-Host "   Gestion de Servidor DHCP"          -ForegroundColor $verde
@@ -661,12 +661,12 @@ function mostrarMenu {
         "1" {
             verificar_Instalacion
             Read-Host "`nEnter para continuar"
-            mostrarMenu
+            mostrarMenuDHCP
         }
         "2" {
             instalar_DHCP
             Read-Host "`nEnter para continuar"
-            mostrarMenu
+            mostrarMenuDHCP
         }
         "3" {
             if ((Get-WindowsFeature -Name DHCP).InstallState -eq "Installed") {
@@ -676,12 +676,12 @@ function mostrarMenu {
                 Write-Host "DHCP no esta instalado" -ForegroundColor $rojo
             }
             Read-Host "`nEnter para continuar"
-            mostrarMenu
+            mostrarMenuDHCP
         }
         "4" {
             monitorear_Clientes
             Read-Host "`nEnter para continuar"
-            mostrarMenu
+            mostrarMenuDHCP
         }
         "5" {
             $scopes = Get-DhcpServerv4Scope -ErrorAction SilentlyContinue
@@ -692,7 +692,7 @@ function mostrarMenu {
                 Write-Host "No hay scopes configurados" -ForegroundColor $amarillo
             }
             Read-Host "`nEnter para continuar"
-            mostrarMenu
+            mostrarMenuDHCP
         }
         "6" {
             Write-Host "Saliendo..." -ForegroundColor $verde
@@ -701,7 +701,7 @@ function mostrarMenu {
         default {
             Write-Host "Opcion invalida" -ForegroundColor $rojo
             Start-Sleep -Seconds 2
-            mostrarMenu
+            mostrarMenuDHCP
         }
     }
 }
@@ -718,4 +718,4 @@ if      ($v) { verificar_Instalacion }
 elseif  ($i) { instalar_DHCP         }
 elseif  ($c) { configuracionDHCP     }
 elseif  ($m) { monitorear_Clientes   }
-else         { mostrarMenu           }
+else         { mostrarMenuDHCP           }
