@@ -1,6 +1,6 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../lib/utils.sh"
-source "$SCRIPT_DIR/../lib/validaciones.sh"
+source "$SCRIPT_DIR/../librerias/varios.sh"
+source "$SCRIPT_DIR/../librerias/validar.sh"
 
 # Variables Globales
 ssh-conf="/etc/ssh/sshd_config"
