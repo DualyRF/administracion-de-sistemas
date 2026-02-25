@@ -12,7 +12,7 @@ if (-not (admin)) {
     exit
 }
 
-do {
+function mostrarMenuPrincipal{
     Clear-Host
     Write-Host "===============================================" -ForegroundColor Yellow
     Write-Host "   MENÚ DE ADMINISTRACIÓN REMOTA (WINDOWS)     " -ForegroundColor Yellow
@@ -28,17 +28,20 @@ do {
     switch ($opcion) {
         "1" { 
             instalarSSH 
-            Pause
+            Read-Host "`nPresiona Enter para continuar"
+            mostrarMenuPrincipal
         }
         "2" { 
             Write-Host "Ejecutando configuración DHCP..."
             mostrarMenuDHCP
-            Pause
+            Read-Host "`nPresiona Enter para continuar"
+            mostrarMenuPrincipal
         }
         "3" { 
             Write-Host "Ejecutando configuración DNS..."
             mostrarMenuDNS
-            Pause
+            Read-Host "`nPresiona Enter para continuar"
+            mostrarMenuPrincipal
         }
         "4" { 
             Write-Host "Saliendo..." -ForegroundColor Magenta
@@ -49,4 +52,4 @@ do {
             Start-Sleep -Seconds 2
         }
     }
-} while ($opcion -ne "4")
+}
