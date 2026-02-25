@@ -12,7 +12,7 @@ if (-not (admin)) {
     exit
 }
 
-function mostrarMenuPrincipal{
+function mostrarMenuPrincipal {
     Clear-Host
     Write-Host "===============================================" -ForegroundColor Yellow
     Write-Host "   MENÚ DE ADMINISTRACIÓN REMOTA (WINDOWS)     " -ForegroundColor Yellow
