@@ -6,13 +6,16 @@
 Clear-Host
 verNiveldeAcceso
 
-# Validar que sea administrador
+# Validar administrador
 if (-not (admin)) {
     Write-Error "Este script debe ejecutarse como Administrador."
     exit
 }
 
-function mostrarMenuPrincipal {
+# Usamos un bucle en lugar de recursividad para evitar errores de memoria y sintaxis
+$salir = $false
+
+while (-not $salir) {
     Clear-Host
     Write-Host "===============================================" -ForegroundColor Yellow
     Write-Host "   MENÚ DE ADMINISTRACIÓN REMOTA (WINDOWS)     " -ForegroundColor Yellow
@@ -28,29 +31,25 @@ function mostrarMenuPrincipal {
     switch ($opcion) {
         "1" { 
             instalarSSH 
-            Read-Host "`nPresiona Enter para continuar"
-            mostrarMenuPrincipal
+            Read-Host "`nPresiona Enter para continuar..."
         }
         "2" { 
             Write-Host "Ejecutando configuración DHCP..."
             mostrarMenuDHCP
-            Read-Host "`nPresiona Enter para continuar"
-            mostrarMenuPrincipal
+            Read-Host "`nPresiona Enter para continuar..."
         }
         "3" { 
             Write-Host "Ejecutando configuración DNS..."
             mostrarMenuDNS
-            Read-Host "`nPresiona Enter para continuar"
-            mostrarMenuPrincipal
+            Read-Host "`nPresiona Enter para continuar..."
         }
         "4" { 
             Write-Host "Saliendo..." -ForegroundColor Magenta
-            break 
+            $salir = $true
         }
         default { 
-            Write-Host "Opcion no valida." -ForegroundColor Red
+            Write-Host "Opción no válida." -ForegroundColor Red
             Start-Sleep -Seconds 2
-            mostrarMenuPrincipal
         }
     }
 }
