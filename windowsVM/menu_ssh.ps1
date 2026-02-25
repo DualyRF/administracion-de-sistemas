@@ -1,21 +1,18 @@
 # Importar las funciones de archivos externos
-. ".\funcionesSSH.ps1"
+. ".librerias\funcionesSSH.ps1"
 . ".\tarea3.ps1"
 . ".\tarea2dhcp.ps1"
 
 Clear-Host
 verNiveldeAcceso
 
-# Validar administrador
+# Validar que sea administrador
 if (-not (admin)) {
     Write-Error "Este script debe ejecutarse como Administrador."
     exit
 }
 
-# Usamos un bucle en lugar de recursividad para evitar errores de memoria y sintaxis
-$salir = $false
-
-while (-not $salir) {
+function mostrarMenuPrincipal {
     Clear-Host
     Write-Host "===============================================" -ForegroundColor Yellow
     Write-Host "   MENÚ DE ADMINISTRACIÓN REMOTA (WINDOWS)     " -ForegroundColor Yellow
@@ -31,25 +28,29 @@ while (-not $salir) {
     switch ($opcion) {
         "1" { 
             instalarSSH 
-            Read-Host "`nPresiona Enter para continuar..."
+            Read-Host "`nPresiona Enter para continuar"
+            mostrarMenuPrincipal
         }
         "2" { 
             Write-Host "Ejecutando configuración DHCP..."
             mostrarMenuDHCP
-            Read-Host "`nPresiona Enter para continuar..."
+            Read-Host "`nPresiona Enter para continuar"
+            mostrarMenuPrincipal
         }
         "3" { 
             Write-Host "Ejecutando configuración DNS..."
             mostrarMenuDNS
-            Read-Host "`nPresiona Enter para continuar..."
+            Read-Host "`nPresiona Enter para continuar"
+            mostrarMenuPrincipal
         }
         "4" { 
             Write-Host "Saliendo..." -ForegroundColor Magenta
-            $salir = $true
+            break 
         }
         default { 
-            Write-Host "Opción no válida." -ForegroundColor Red
+            Write-Host "Opcion no valida." -ForegroundColor Red
             Start-Sleep -Seconds 2
+            mostrarMenuPrincipal
         }
     }
 }
