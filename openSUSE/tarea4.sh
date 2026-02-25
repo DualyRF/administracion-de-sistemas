@@ -1,6 +1,6 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../librerias/varios.sh"
-source "$SCRIPT_DIR/../librerias/validar.sh"
+source "$SCRIPT_DIR/librerias/varios.sh"
+source "$SCRIPT_DIR/librerias/validar.sh"
 
 # Variables Globales
 ssh-conf="/etc/ssh/sshd_config"
@@ -21,22 +21,22 @@ verificar_Instalacion() {
 
     if rpm -q openssh-server &>/dev/null; then
         local version=$(rpm -q openssh-server --queryformat '%{VERSION}')
-        print_completado "SSH ya está instalado (versión: $version)"
+        print_success "SSH ya está instalado (versión: $version)"
         return 0
     fi
 
     if command -v sshd &>/dev/null; then
         local version=$(sshd -v 2>&1 | head -1)
-        print_completado "SSH encontrado: $version"
+        print_success "SSH encontrado: $version"
         return 0
     fi
 
-    print_error "SSH no está instalado"
+    print_warning "SSH no está instalado"
     return 1
 }
 
 instalar_SSH() {
-    print_titulo "=== Instalación y Configuración de SSH ==="
+    print_menu "=== Instalación y Configuración de SSH ==="
     echo ""
 
     # 1. Verificar si SSH ya está instalado
@@ -57,9 +57,9 @@ instalar_SSH() {
         wait $pid
 
         if [ $? -eq 0 ]; then
-            print_completado "SSH instalado correctamente"
+            print_success "SSH instalado correctamente"
         else
-            print_error "Error en la instalación de SSH"
+            print_warning "Error en la instalación de SSH"
             return 1
         fi
     fi
@@ -69,9 +69,9 @@ instalar_SSH() {
     # 2. Activar y habilitar el servicio
     print_info "Habilitando servicio SSH en el arranque..."
     if sudo systemctl enable sshd 2>/dev/null; then
-        print_completado "Servicio sshd habilitado"
+        print_success "Servicio sshd habilitado"
     else
-        print_error "No se pudo habilitar el servicio sshd"
+        print_warning "No se pudo habilitar el servicio sshd"
         return 1
     fi
 
@@ -79,17 +79,17 @@ instalar_SSH() {
     if systemctl is-active --quiet sshd; then
         print_info "Servicio ya estaba activo, reiniciando..."
         if sudo systemctl restart sshd 2>/dev/null; then
-            print_completado "Servicio sshd reiniciado"
+            print_success "Servicio sshd reiniciado"
         else
-            print_error "Error al reiniciar el servicio sshd"
+            print_warning "Error al reiniciar el servicio sshd"
             return 1
         fi
     else
         if sudo systemctl start sshd 2>/dev/null; then
-            print_completado "Servicio sshd iniciado"
+            print_success "Servicio sshd iniciado"
         else
-            print_error "Error al iniciar el servicio sshd"
-            print_error "Revise los logs: journalctl -u sshd"
+            print_warning "Error al iniciar el servicio sshd"
+            print_warning "Revise los logs: journalctl -u sshd"
             return 1
         fi
     fi
@@ -104,19 +104,19 @@ instalar_SSH() {
     print_info "Configurando firewall para SSH (puerto $puerto)..."
     if command -v firewall-cmd &>/dev/null; then
         if sudo firewall-cmd --add-port="$puerto"/tcp --permanent 2>/dev/null; then
-            print_completado "Puerto $puerto/tcp abierto en firewall (permanente)"
+            print_success "Puerto $puerto/tcp abierto en firewall (permanente)"
         else
-            print_error "No se pudo configurar el firewall"
+            print_warning "No se pudo configurar el firewall"
         fi
 
         if sudo firewall-cmd --reload 2>/dev/null; then
-            print_completado "Firewall recargado"
+            print_success "Firewall recargado"
         else
-            print_error "No se pudo recargar el firewall"
+            print_warning "No se pudo recargar el firewall"
         fi
     else
-        print_error "firewalld no encontrado, configure el firewall manualmente"
-        print_error "Abra el puerto $puerto TCP"
+        print_warning "firewalld no encontrado, configure el firewall manualmente"
+        print_warning "Abra el puerto $puerto TCP"
     fi
 
     # 5. Verificacion final
@@ -125,35 +125,35 @@ instalar_SSH() {
     echo ""
 
     if systemctl is-active --quiet sshd; then
-        print_completado "Servicio sshd: activo y corriendo"
+        print_success "Servicio sshd: activo y corriendo"
     else
-        print_error "Servicio sshd: NO está corriendo"
+        print_warning "Servicio sshd: NO está corriendo"
         return 1
     fi
 
     if ss -tulnp 2>/dev/null | grep -q ":$puerto "; then
-        print_completado "Puerto $puerto: escuchando"
+        print_success "Puerto $puerto: escuchando"
     else
-        print_error "Puerto $puerto: NO está escuchando"
+        print_warning "Puerto $puerto: NO está escuchando"
     fi
 
     # 6. Resumen
     local ip=$(ip addr show enp0s8 | grep 'inet ' | awk '{print $2}' | cut -d'/' -f1)
     echo ""
-    print_completado "══════════════════════════════════════"
-    print_completado "  SSH listo para conexiones remotas"
-    print_completado "══════════════════════════════════════"
+    print_success "══════════════════════════════════════"
+    print_success "  SSH listo para conexiones remotas"
+    print_success "══════════════════════════════════════"
     print_info "  IP del servidor : ${verde}$ip${nc}"
     print_info "  Puerto          : ${verde}$puerto${nc}"
     print_info "  Comando SSH     : ${verde}ssh usuario@$ip -p $puerto${nc}"
-    print_completado "══════════════════════════════════════"
+    print_success "══════════════════════════════════════"
 }
 
 reiniciar_SSH() {
     print_info "Reiniciando servidor SSH..."
 
     if ! systemctl is-active --quiet sshd; then
-        print_error "El servicio SSH no está activo"
+        print_warning "El servicio SSH no está activo"
         read -p "¿Desea iniciarlo en lugar de reiniciarlo? (y/n): " opc
         if [[ "$opc" = "y" ]]; then
             sudo systemctl start sshd
@@ -165,16 +165,16 @@ reiniciar_SSH() {
     fi
 
     if systemctl is-active --quiet sshd; then
-        print_completado "Servidor SSH reiniciado correctamente"
+        print_success "Servidor SSH reiniciado correctamente"
         sudo systemctl status sshd --no-pager
     else
-        print_error "Error al reiniciar el servidor SSH"
+        print_warning "Error al reiniciar el servidor SSH"
         print_info "Ejecute: sudo journalctl -xeu sshd.service"
     fi
 }
 
 ver_Estado() {
-    print_titulo "=== ESTADO DEL SERVIDOR SSH ==="
+    print_menu "=== ESTADO DEL SERVIDOR SSH ==="
     sudo systemctl status sshd --no-pager
 }
 
