@@ -1,240 +1,188 @@
-# Tarea 4 - Automatizacion y gestion del servidor SSH (Windows)
-# Requiere ejecutarse como Administrador
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../lib/utils.sh"
+source "$SCRIPT_DIR/../lib/validaciones.sh"
 
-# ---------- Colores ----------
-function Print-Error      { param($msg) Write-Host $msg -ForegroundColor Red }
-function Print-Completado { param($msg) Write-Host $msg -ForegroundColor Green }
-function Print-Info       { param($msg) Write-Host $msg -ForegroundColor Yellow }
-function Print-Titulo     { param($msg) Write-Host $msg -ForegroundColor Cyan }
+# Variables Globales
+ssh-conf="/etc/ssh/sshd_config"
+ssh_conf_dir="/etc/ssh/sshd_config.d"
 
-# ---------- Verificar Administrador ----------
-function Verificar-Admin {
-    $esAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    if (-not $esAdmin) {
-        Print-Error "Este script debe ejecutarse como Administrador."
-        Print-Info  "Haz clic derecho en PowerShell y selecciona 'Ejecutar como administrador'."
-        exit 1
-    }
+ayuda() {
+    echo "Uso del script: $0"
+    echo "Opciones:"
+    echo -e "  -v, --verify       Verifica si esta instalado SSH"
+    echo -e "  -i, --install      Instala y configura SSH"
+    echo -e "  -r, --restart      Reiniciar servidor SSH"
+    echo -e "  -s, --status       Verificar estado del servidor SSH"
+    echo -e "  -?, --help         Muestra esta ayuda"
 }
 
-# ---------- Funciones ----------
+verificar_Instalacion() {
+    print_info "Verificando instalación de SSH"
 
-function Ayuda {
-    Write-Host "Uso del script: .\tarea4_SSH_windows.ps1 [opcion]"
-    Write-Host "Opciones:"
-    Write-Host "  -verify       Verifica si esta instalado SSH"
-    Write-Host "  -install      Instala y configura SSH"
-    Write-Host "  -restart      Reiniciar servidor SSH"
-    Write-Host "  -status       Verificar estado del servidor SSH"
-    Write-Host "  -help         Muestra esta ayuda"
+    if rpm -q openssh-server &>/dev/null; then
+        local version=$(rpm -q openssh-server --queryformat '%{VERSION}')
+        print_completado "SSH ya está instalado (versión: $version)"
+        return 0
+    fi
+
+    if command -v sshd &>/dev/null; then
+        local version=$(sshd -v 2>&1 | head -1)
+        print_completado "SSH encontrado: $version"
+        return 0
+    fi
+
+    print_error "SSH no está instalado"
+    return 1
 }
 
-function Verificar-Instalacion {
-    Print-Info "Verificando instalacion de SSH..."
+instalar_SSH() {
+    print_titulo "=== Instalación y Configuración de SSH ==="
+    echo ""
 
-    $ssh = Get-WindowsCapability -Online | Where-Object { $_.Name -like "OpenSSH.Server*" }
+    # 1. Verificar si SSH ya está instalado
+    if verificar_Instalacion; then
+        print_info "¿Desea reconfigurar el servidor SSH? [s/N]: "
+        read -r reconf
+        if [[ ! "$reconf" =~ ^[Ss]$ ]]; then
+            print_info "Operación cancelada"
+            return 0
+        fi
+    else
+        print_info "Instalando openssh-server..."
 
-    if ($ssh.State -eq "Installed") {
-        $version = (Get-Item "$env:SystemRoot\System32\OpenSSH\sshd.exe").VersionInfo.FileVersion
-        Print-Completado "SSH ya esta instalado (version: $version)"
-        return $true
-    }
+        sudo zypper --non-interactive --quiet install openssh-server > /dev/null 2>&1 &
+        pid=$!
 
-    Print-Error "SSH no esta instalado"
-    return $false
-}
+        print_info "SSH se está instalando..."
+        wait $pid
 
-function Instalar-SSH {
-    Print-Titulo "=== Instalacion y Configuracion de SSH ==="
-    Write-Host ""
+        if [ $? -eq 0 ]; then
+            print_completado "SSH instalado correctamente"
+        else
+            print_error "Error en la instalación de SSH"
+            return 1
+        fi
+    fi
 
-    # 1. Verificar si SSH ya esta instalado
-    if (Verificar-Instalacion) {
-        $reconf = Read-Host "Desea reconfigurar el servidor SSH? [s/N]"
-        if ($reconf -notmatch "^[Ss]$") {
-            Print-Info "Operacion cancelada"
-            return
-        }
-    } else {
-        Print-Info "Instalando OpenSSH Server..."
-
-        Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 | Out-Null
-
-        if ($?) {
-            Print-Completado "SSH instalado correctamente"
-        } else {
-            Print-Error "Error en la instalacion de SSH"
-            return
-        }
-    }
-
-    Write-Host ""
+    echo ""
 
     # 2. Activar y habilitar el servicio
-    Print-Info "Habilitando servicio SSH en el arranque..."
-    Set-Service -Name sshd -StartupType Automatic
-    Print-Completado "Servicio sshd configurado para arranque automatico"
+    print_info "Habilitando servicio SSH en el arranque..."
+    if sudo systemctl enable sshd 2>/dev/null; then
+        print_completado "Servicio sshd habilitado"
+    else
+        print_error "No se pudo habilitar el servicio sshd"
+        return 1
+    fi
 
-    Print-Info "Iniciando servicio SSH..."
-    $estado = (Get-Service -Name sshd).Status
-
-    if ($estado -eq "Running") {
-        Print-Info "Servicio ya estaba activo, reiniciando..."
-        Restart-Service sshd
-        Print-Completado "Servicio sshd reiniciado"
-    } else {
-        Start-Service sshd
-        if ((Get-Service -Name sshd).Status -eq "Running") {
-            Print-Completado "Servicio sshd iniciado"
-        } else {
-            Print-Error "Error al iniciar el servicio sshd"
-            Print-Error "Revise los logs: Get-EventLog -LogName System -Source sshd"
-            return
-        }
-    }
+    print_info "Iniciando servicio SSH..."
+    if systemctl is-active --quiet sshd; then
+        print_info "Servicio ya estaba activo, reiniciando..."
+        if sudo systemctl restart sshd 2>/dev/null; then
+            print_completado "Servicio sshd reiniciado"
+        else
+            print_error "Error al reiniciar el servicio sshd"
+            return 1
+        fi
+    else
+        if sudo systemctl start sshd 2>/dev/null; then
+            print_completado "Servicio sshd iniciado"
+        else
+            print_error "Error al iniciar el servicio sshd"
+            print_error "Revise los logs: journalctl -u sshd"
+            return 1
+        fi
+    fi
 
     # 3. Obtener el puerto configurado
-    $sshConf = "$env:ProgramData\ssh\sshd_config"
-    $puerto = 22
+    local puerto=$(grep -rE "^Port " "$ssh_conf" "$sshd_conf_dir"/*.conf 2>/dev/null | awk '{print $NF}' | head -1)
+    puerto=${puerto:-22}
 
-    if (Test-Path $sshConf) {
-        $lineaPuerto = Select-String -Path $sshConf -Pattern "^Port\s+(\d+)" | Select-Object -First 1
-        if ($lineaPuerto) {
-            $puerto = $lineaPuerto.Matches.Groups[1].Value
-        }
-    }
-
-    Print-Info "Puerto SSH configurado: $puerto"
+    print_info "Puerto SSH configurado: $puerto"
 
     # 4. Abrir puerto en el firewall
-    Print-Info "Configurando firewall para SSH (puerto $puerto)..."
+    print_info "Configurando firewall para SSH (puerto $puerto)..."
+    if command -v firewall-cmd &>/dev/null; then
+        if sudo firewall-cmd --add-port="$puerto"/tcp --permanent 2>/dev/null; then
+            print_completado "Puerto $puerto/tcp abierto en firewall (permanente)"
+        else
+            print_error "No se pudo configurar el firewall"
+        fi
 
-    $regla = Get-NetFirewallRule -Name "OpenSSH-Server-In-TCP" -ErrorAction SilentlyContinue
-
-    if ($regla) {
-        if ($regla.Enabled -eq "True") {
-            Set-NetFirewallRule -Name "OpenSSH-Server-In-TCP" -Profile Any
-            Print-Completado "Regla de firewall ya existe y esta habilitada"
-        } else {
-            Print-Error "La regla existe pero esta DESHABILITADA, habilitando..."
-            Set-NetFirewallRule -Name "OpenSSH-Server-In-TCP" -Enabled True
-            Print-Completado "Regla habilitada correctamente"
-        }
-    } else {
-        New-NetFirewallRule -Name "OpenSSH-Server-In-TCP" `
-            -DisplayName "OpenSSH SSH Server (sshd)" `
-            -Enabled True `
-            -Direction Inbound `
-            -Protocol TCP `
-            -Action Allow `
-            -LocalPort $puerto | Out-Null
-
-        if ($?) {
-            Print-Completado "Puerto $puerto/TCP abierto en el firewall"
-        } else {
-            Print-Error "No se pudo configurar el firewall"
-        }
-    }
+        if sudo firewall-cmd --reload 2>/dev/null; then
+            print_completado "Firewall recargado"
+        else
+            print_error "No se pudo recargar el firewall"
+        fi
+    else
+        print_error "firewalld no encontrado, configure el firewall manualmente"
+        print_error "Abra el puerto $puerto TCP"
+    fi
 
     # 5. Verificacion final
-    Write-Host ""
-    Print-Info "Verificando estado del servidor SSH..."
-    Write-Host ""
+    echo ""
+    print_info "Verificando estado del servidor SSH..."
+    echo ""
 
-    if ((Get-Service -Name sshd).Status -eq "Running") {
-        Print-Completado "Servicio sshd: activo y corriendo"
-    } else {
-        Print-Error "Servicio sshd: NO esta corriendo"
-        return
-    }
+    if systemctl is-active --quiet sshd; then
+        print_completado "Servicio sshd: activo y corriendo"
+    else
+        print_error "Servicio sshd: NO está corriendo"
+        return 1
+    fi
 
-    $escuchando = netstat -an | Select-String ":$puerto\s.*LISTENING"
-    if ($escuchando) {
-        Print-Completado "Puerto ${puerto}: escuchando"
-    } else {
-        Print-Error "Puerto ${puerto}: NO esta escuchando"
-    }
+    if ss -tulnp 2>/dev/null | grep -q ":$puerto "; then
+        print_completado "Puerto $puerto: escuchando"
+    else
+        print_error "Puerto $puerto: NO está escuchando"
+    fi
 
     # 6. Resumen
-    $ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notlike "*Loopback*" } | Select-Object -First 1).IPAddress
-
-    Write-Host ""
-    Print-Completado "======================================"
-    Print-Completado "  SSH listo para conexiones remotas"
-    Print-Completado "======================================"
-    Print-Info       "  IP del servidor : $ip"
-    Print-Info       "  Puerto          : $puerto"
-    Print-Info       "  Comando SSH     : ssh usuario@$ip -p $puerto"
-    Print-Completado "======================================"
+    local ip=$(ip addr show enp0s8 | grep 'inet ' | awk '{print $2}' | cut -d'/' -f1)
+    echo ""
+    print_completado "══════════════════════════════════════"
+    print_completado "  SSH listo para conexiones remotas"
+    print_completado "══════════════════════════════════════"
+    print_info "  IP del servidor : ${verde}$ip${nc}"
+    print_info "  Puerto          : ${verde}$puerto${nc}"
+    print_info "  Comando SSH     : ${verde}ssh usuario@$ip -p $puerto${nc}"
+    print_completado "══════════════════════════════════════"
 }
 
-function Reiniciar-SSH {
-    Print-Info "Reiniciando servidor SSH..."
+reiniciar_SSH() {
+    print_info "Reiniciando servidor SSH..."
 
-    $estado = (Get-Service -Name sshd -ErrorAction SilentlyContinue).Status
+    if ! systemctl is-active --quiet sshd; then
+        print_error "El servicio SSH no está activo"
+        read -p "¿Desea iniciarlo en lugar de reiniciarlo? (y/n): " opc
+        if [[ "$opc" = "y" ]]; then
+            sudo systemctl start sshd
+        else
+            return 1
+        fi
+    else
+        sudo systemctl restart sshd
+    fi
 
-    if ($null -eq $estado) {
-        Print-Error "El servicio sshd no existe. Instale SSH primero con -install"
-        return
-    }
-
-    if ($estado -ne "Running") {
-        Print-Error "El servicio SSH no esta activo"
-        $opc = Read-Host "Desea iniciarlo en lugar de reiniciarlo? (y/n)"
-        if ($opc -eq "y") {
-            Start-Service sshd
-        } else {
-            return
-        }
-    } else {
-        Restart-Service sshd
-    }
-
-    if ((Get-Service -Name sshd).Status -eq "Running") {
-        Print-Completado "Servidor SSH reiniciado correctamente"
-        Get-Service sshd
-    } else {
-        Print-Error "Error al reiniciar el servidor SSH"
-        Print-Info  "Revise los logs: Get-EventLog -LogName System -Source sshd"
-    }
+    if systemctl is-active --quiet sshd; then
+        print_completado "Servidor SSH reiniciado correctamente"
+        sudo systemctl status sshd --no-pager
+    else
+        print_error "Error al reiniciar el servidor SSH"
+        print_info "Ejecute: sudo journalctl -xeu sshd.service"
+    fi
 }
 
-function Ver-Estado {
-    Print-Titulo "=== ESTADO DEL SERVIDOR SSH ==="
-    $servicio = Get-Service -Name sshd -ErrorAction SilentlyContinue
-
-    if ($null -eq $servicio) {
-        Print-Error "El servicio sshd no existe. SSH no esta instalado."
-        return
-    }
-
-    Get-Service sshd
-    Write-Host ""
-    Print-Info "Tipo de inicio: $((Get-Service sshd).StartType)"
-
-    $ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notlike "*Loopback*" } | Select-Object -First 1).IPAddress
-    $sshConf = "$env:ProgramData\ssh\sshd_config"
-    $puerto = 22
-
-    if (Test-Path $sshConf) {
-        $lineaPuerto = Select-String -Path $sshConf -Pattern "^Port\s+(\d+)" | Select-Object -First 1
-        if ($lineaPuerto) {
-            $puerto = $lineaPuerto.Matches.Groups[1].Value
-        }
-    }
-
-    Print-Info "IP del servidor : $ip"
-    Print-Info "Puerto          : $puerto"
+ver_Estado() {
+    print_titulo "=== ESTADO DEL SERVIDOR SSH ==="
+    sudo systemctl status sshd --no-pager
 }
 
-# ---------- Main ----------
-Verificar-Admin
-
-switch ($args[0]) {
-    "-verify"  { Verificar-Instalacion }
-    "-install" { Instalar-SSH }
-    "-restart" { Reiniciar-SSH }
-    "-status"  { Ver-Estado }
-    "-help"    { Ayuda }
-    default    { Ayuda }
-}
+case $1 in
+    -v | --verify)  verificar_Instalacion ;;
+    -i | --install) instalar_SSH ;;
+    -m | --status) ver_Estado ;;
+    -r | --restart) reiniciar_ssh ;;
+    -? | --help)    ayuda ;;
+    *)              ayuda ;;
+esac
