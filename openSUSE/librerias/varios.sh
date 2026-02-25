@@ -1,10 +1,10 @@
 # colores en variables
-rojo='\033[0;31m'
-amarillo='\033[1;33m'
-verde='\033[0;32m'
+rojo='\033[0;95m'  
+amarillo='\033[1;93m'
+verde='\033[0;96m'
 azul='\033[1;34m'
-cyan='\033[0;36m'
 nc='\033[0m'
+cyan='\033[0;36m'
 
 # Funciones para imprimir mensajes 
 print_warning(){
