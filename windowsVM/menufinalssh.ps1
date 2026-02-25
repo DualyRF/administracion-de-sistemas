@@ -1,5 +1,4 @@
-# Importar las funciones de archivos externos
-. ".\librerias\funcionesSSH.ps1"
+. ".librerias\funcionesSSH.ps1"
 . ".\tarea3.ps1"
 . ".\tarea2dhcp.ps1"
 
@@ -15,7 +14,7 @@ if (-not (admin)) {
 function mostrarMenuPrincipal {
     Clear-Host
     Write-Host "===============================================" -ForegroundColor Yellow
-    Write-Host "   MENU DE ADMINISTRACION REMOTA (WINDOWS)     " -ForegroundColor Yellow
+    Write-Host "   MENÚ DE ADMINISTRACIÓN REMOTA (WINDOWS)     " -ForegroundColor Yellow
     Write-Host "===============================================" -ForegroundColor Yellow
     Write-Host "1. Instalar y Asegurar SSH (Acceso Remoto)"
     Write-Host "2. Configurar Servicio DHCP (Refactorizado)"
@@ -23,7 +22,7 @@ function mostrarMenuPrincipal {
     Write-Host "4. Salir"
     Write-Host "-----------------------------------------------"
     
-    $opcion = Read-Host "Seleccione una opcion"
+    $opcion = Read-Host "Seleccione una opción"
 
     switch ($opcion) {
         "1" { 
@@ -32,13 +31,13 @@ function mostrarMenuPrincipal {
             mostrarMenuPrincipal
         }
         "2" { 
-            Write-Host "Ejecutando configuracion DHCP..."
+            Write-Host "Ejecutando configuración DHCP..."
             mostrarMenuDHCP
             Read-Host "`nPresiona Enter para continuar"
             mostrarMenuPrincipal
         }
         "3" { 
-            Write-Host "Ejecutando configuracion DNS..."
+            Write-Host "Ejecutando configuración DNS..."
             mostrarMenuDNS
             Read-Host "`nPresiona Enter para continuar"
             mostrarMenuPrincipal
@@ -54,6 +53,3 @@ function mostrarMenuPrincipal {
         }
     }
 }
-
-# Main
-mostrarMenuPrincipal
