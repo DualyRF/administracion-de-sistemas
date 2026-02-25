@@ -47,9 +47,10 @@ function mostrarMenuPrincipal{
             Write-Host "Saliendo..." -ForegroundColor Magenta
             break 
         }
-        Default { 
-            Write-Host "Opción no válida." -ForegroundColor Red
+        default { 
+            Write-Host "Opcion no valida." -ForegroundColor Red
             Start-Sleep -Seconds 2
+            mostrarMenuPrincipal
         }
     }
 }
