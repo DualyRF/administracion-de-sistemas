@@ -24,13 +24,13 @@ readonly INTERFAZ_RED="enp0s9"
 ayuda() {
     echo "Uso del script: $0"
     echo "Opciones:"
-    echo -e "  -v, --verify       Verifica si esta instalado VSFTPD"
-    echo -e "  -i, --install      Instala / Configura el servidor FTP"
-    echo -e "  -u, --users        Gestionar a los usuarios FTP"
-    echo -e "  -r, --restart      Reiniciar el servidor FTP"
-    echo -e "  -s, --status       Verificar el estado del servidor FTP"
-    echo -e "  -l, --list         Mostrar usuarios y estructura FTP"
-    echo -e "  -?, --help         Muestra este menu"
+    echo -e "  -vr, --verify       Verifica si esta instalado VSFTPD"
+    echo -e "  -in, --install      Instala / Configura el servidor FTP"
+    echo -e "  -us, --users        Gestionar a los usuarios FTP"
+    echo -e "  -rs, --restart      Reiniciar el servidor FTP"
+    echo -e "  -st, --status       Verificar el estado del servidor FTP"
+    echo -e "  -ls, --list         Mostrar usuarios y estructura FTP"
+    echo -e "  -?, --help          Muestra este menu"
 }
 
 
@@ -112,7 +112,7 @@ instalarFTP() {
     print_titulo "Instalación y Configuración de Servidor FTP"
     
     # 1. Verificar si vsftpd ya está instalado
-    if verificar_Instalacion; then
+    if verificarVSFTPD; then
         print_info "¿Desea reconfigurar el servidor FTP? [s/N]: "
         read -r reconf
         if [[ ! "$reconf" =~ ^[Ss]$ ]]; then
@@ -369,7 +369,7 @@ EOF
 }
 
 # Verificar instalación de vsftpd
-verificar_Instalacion() {
+verificarVSFTPD() {
     print_info "Verificando instalación de vsftpd"
     
     if rpm -q $PAQUETE &>/dev/null; then
@@ -394,7 +394,7 @@ verificar_Instalacion() {
 # -------------
 
 # Validar nombre de usuario
-validar_Usuario() {
+validarUsuario() {
     local usuario="$1"
     
     # Verificar que no esté vacío
@@ -426,7 +426,7 @@ validar_Usuario() {
 }
 
 # Validar contraseña
-validar_Contrasena() {
+validarContra() {
     local password="$1"
     
     # Verificar longitud mínima
@@ -439,7 +439,7 @@ validar_Contrasena() {
 }
 
 # Crear usuario FTP
-crear_Usuario_FTP() {
+crearUsuarioFTP() {
     local usuario="$1"
     local password="$2"
     local grupo="$3"
@@ -498,7 +498,7 @@ crear_Usuario_FTP() {
 }
 
 # Cambiar usuario de grupo
-cambiar_Grupo_Usuario() {
+cambioGrupo() {
     local usuario="$1"
     
     # Verificar que el usuario existe
@@ -550,11 +550,11 @@ cambiar_Grupo_Usuario() {
 }
 
 # Gestionar usuarios FTP
-gestionar_Usuarios() {
+gestionUsuarios() {
     print_titulo "Gestión de Usuarios FTP"
     
     # Verificar que vsftpd esté instalado
-    if ! verificar_Instalacion &>/dev/null; then
+    if ! verificarVSFTPD &>/dev/null; then
         print_warning "vsftpd no está instalado"
         print_info "Ejecute primero: $0 -i"
         return 1
@@ -586,7 +586,7 @@ gestionar_Usuarios() {
                 # Pedir nombre de usuario
                 while true; do
                     read -p "Nombre de usuario: " usuario
-                    if validar_Usuario "$usuario"; then
+                    if validarUsuario "$usuario"; then
                         break
                     fi
                 done
@@ -595,7 +595,7 @@ gestionar_Usuarios() {
                 while true; do
                     read -s -p "Contraseña: " password
                     echo ""
-                    if validar_Contrasena "$password"; then
+                    if validarContra "$password"; then
                         read -s -p "Confirmar contraseña: " password2
                         echo ""
                         if [ "$password" == "$password2" ]; then
@@ -624,7 +624,7 @@ gestionar_Usuarios() {
                 esac
                 
                 # Crear usuario
-                if crear_Usuario_FTP "$usuario" "$password" "$grupo"; then
+                if crearUsuarioFTP "$usuario" "$password" "$grupo"; then
                     echo ""
                     print_success "Usuario '$usuario' creado en grupo '$grupo'"
                 else
@@ -642,10 +642,10 @@ gestionar_Usuarios() {
         2)
             # Cambiar grupo
             echo ""
-            listar_Usuarios_FTP
+            mostrarUsuariosFTP
             echo ""
             read -p "Ingrese el nombre del usuario: " usuario
-            cambiar_Grupo_Usuario "$usuario"
+            cambioGrupo "$usuario"
             
             if [ $? -eq 0 ]; then
                 print_info "Reiniciando servicio vsftpd..."
@@ -656,7 +656,7 @@ gestionar_Usuarios() {
         3)
             # Eliminar usuario
             echo ""
-            listar_Usuarios_FTP
+            mostrarUsuariosFTP
             echo ""
             read -p "Ingrese el nombre del usuario a eliminar: " usuario
             
@@ -696,7 +696,7 @@ gestionar_Usuarios() {
 }
 
 # Mostrar los usuarios FTP
-listar_Usuarios_FTP() {
+mostrarUsuariosFTP() {
     print_titulo "Usuarios FTP Configurados"
     
     if [ ! -f /etc/vsftpd.user_list ]; then
@@ -750,7 +750,7 @@ mostrarEstructura() {
     fi
     
     echo ""
-    listar_Usuarios_FTP
+    mostrarUsuariosFTP
 }
 
 
@@ -765,12 +765,12 @@ fi
 # ARGUMENTOS (Main)
 # ============================================================================
 case $1 in
-    -v | --verify)  verificar_Instalacion ;;
-    -i | --install) instalarFTP ;;
-    -u | --users)   gestionar_Usuarios ;;
-    -s | --status)  verEstadoServ ;;
-    -r | --restart) reiniciarFTP ;;
-    -l | --list)    mostrarEstructura ;;
+    -vr | --verify)  verificarVSFTPD ;;
+    -in | --install) instalarFTP ;;
+    -us | --users)   gestionUsuarios ;;
+    -st | --status)  verEstadoServ ;;
+    -rs | --restart) reiniciarFTP ;;
+    -ls | --list)    mostrarEstructura ;;
     -? | --help)    ayuda ;;
     *)              ayuda ;;
 esac
