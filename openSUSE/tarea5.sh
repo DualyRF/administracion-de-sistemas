@@ -1,12 +1,6 @@
 #!/bin/bash
 
-# ============================================================================
-# Script de Automatización de Servidor FTP - openSUSE Leap
-# Administración de Sistemas
-# Servidor: vsftpd (Very Secure FTP Daemon)
-# ============================================================================
-
-# Cargar librerías compartidas
+# Cargar librerías 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/librerias/varios.sh"
 source "$SCRIPT_DIR/librerias/validar.sh"
