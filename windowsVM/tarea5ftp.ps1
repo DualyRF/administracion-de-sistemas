@@ -324,7 +324,16 @@ function cambioDeGrupo {
     # Normalizar: quitar prefijo SERVIDOR\ si el usuario lo incluyo
     $Username = $Username -replace "^.*\\", ""
 
-    $grupovj    = if ($gruponv -eq "reprobados") { "recursadores" } else { "reprobados" }
+    # Busca en cuál grupo está realmente el usuario
+    $grupovj = $null
+    foreach ($g in $GROUPS) {
+        $members = Get-LocalGroupMember -Group $g -ErrorAction SilentlyContinue
+        $encontrado = $members | Where-Object {
+            ($_.Name -replace "^.*\\", "") -eq $Username
+        }
+        if ($encontrado) { $grupovj = $g; break }
+    }
+
     $carpetavj   = if ($grupovj -eq "reprobados") { "$REPROB_PATH\$Username" } else { "$RECURS_PATH\$Username" }
     $carpetanv   = if ($gruponv -eq "reprobados") { "$REPROB_PATH\$Username" } else { "$RECURS_PATH\$Username" }
 
@@ -437,7 +446,7 @@ function menuCambioGrupo {
         $gruponv = (Read-Host "Nuevo grupo [reprobados / recursadores]").Trim().ToLower()
     } while ($gruponv -notin $GROUPS)
 
-    Move-UserToGroup -Username $username -gruponv $gruponv
+    cambioDeGrupo -Username $username -gruponv $gruponv
 }
 
 # -----------------------------------------------------------------------------
@@ -526,7 +535,7 @@ function menuPrincipalFTP {
             "3" { crearUsuario }
             "4" { menuCambioGrupo }
             "5" { mostrarEstadoFTP }
-            "6" { Write-Log "Saliendo..." "Info"; return }
+            "6" { Write-Host "Saliendo..."; return }
             default { Write-Log "Opcion no valida." "Warn" }
         }
     } while ($true)
