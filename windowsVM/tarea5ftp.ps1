@@ -316,14 +316,17 @@ function crearUsuarioFTP {
 # -----------------------------------------------------------------------------
 
 function cambioDeGrupo {
-    param(
+ param(
         [string]$Username,
-        [string]$NewGroup
+        [string]$gruponv
     )
 
-    $grupovj    = if ($NewGroup -eq "reprobados") { "recursadores" } else { "reprobados" }
+    # Normalizar: quitar prefijo SERVIDOR\ si el usuario lo incluyo
+    $Username = $Username -replace "^.*\\", ""
+
+    $grupovj    = if ($gruponv -eq "reprobados") { "recursadores" } else { "reprobados" }
     $carpetavj   = if ($grupovj -eq "reprobados") { "$REPROB_PATH\$Username" } else { "$RECURS_PATH\$Username" }
-    $carpetanv   = if ($NewGroup -eq "reprobados") { "$REPROB_PATH\$Username" } else { "$RECURS_PATH\$Username" }
+    $carpetanv   = if ($gruponv -eq "reprobados") { "$REPROB_PATH\$Username" } else { "$RECURS_PATH\$Username" }
 
     # Verificar que el usuario existe
     if (-not (Get-LocalUser -Name $Username -ErrorAction SilentlyContinue)) {
@@ -331,11 +334,11 @@ function cambioDeGrupo {
         return
     }
 
-    Write-Log "Moviendo '$Username' de '$grupovj' a '$NewGroup'..." "Info"
+    Write-Log "Moviendo '$Username' de '$grupovj' a '$gruponv'..." "Info"
 
     # Cambiar grupos
     Remove-LocalGroupMember -Group $grupovj -Member $Username -ErrorAction SilentlyContinue
-    Add-LocalGroupMember    -Group $NewGroup -Member $Username -ErrorAction SilentlyContinue
+    Add-LocalGroupMember    -Group $gruponv -Member $Username -ErrorAction SilentlyContinue
     Write-Log "Membresia de grupo actualizada." "OK"
 
     # Mover carpeta personal
@@ -369,7 +372,7 @@ function cambioDeGrupo {
     Set-Acl -Path $carpetanv -AclObject $acl
     Write-Log "Permisos NTFS actualizados en '$carpetanv'." "OK"
 
-    Write-Log "Usuario '$Username' movido exitosamente al grupo '$NewGroup'." "OK"
+    Write-Log "Usuario '$Username' movido exitosamente al grupo '$gruponv'." "OK"
 }
 
 # -----------------------------------------------------------------------------
@@ -410,15 +413,31 @@ function crearUsuario {
 function menuCambioGrupo {
     Write-Section "CAMBIO DE GRUPO DE USUARIO"
 
+    # Mostrar usuarios existentes por grupo para referencia
+    Write-Host ""
+    Write-Host "  Usuarios registrados:" -ForegroundColor Yellow
+    foreach ($g in $GROUPS) {
+        $members = Get-LocalGroupMember -Group $g -ErrorAction SilentlyContinue
+        if ($members) {
+            Write-Host "  [$g]" -ForegroundColor Cyan
+            $members | ForEach-Object {
+                # Mostrar solo el nombre corto sin SERVIDOR
+                $shortName = $_.Name -replace "^.*\\", ""
+                Write-Host "    - $shortName"
+            }
+        }
+    }
+    Write-Host ""
+
     do {
         $username = (Read-Host "Nombre del usuario a mover").Trim()
     } while ([string]::IsNullOrWhiteSpace($username))
 
     do {
-        $newGroup = (Read-Host "Nuevo grupo [reprobados / recursadores]").Trim().ToLower()
-    } while ($newGroup -notin $GROUPS)
+        $gruponv = (Read-Host "Nuevo grupo [reprobados / recursadores]").Trim().ToLower()
+    } while ($gruponv -notin $GROUPS)
 
-    cambioDeGrupo -Username $username -NewGroup $newGroup
+    Move-UserToGroup -Username $username -gruponv $gruponv
 }
 
 # -----------------------------------------------------------------------------
@@ -479,7 +498,7 @@ function menuPrincipalFTP {
         Clear-Host
         Write-Host ""
         Write-Host "--------------------------------------------" -ForegroundColor Magenta
-        Write-Host "       GESTION SERVIDOR FTP                 " -ForegroundColor Magenta
+        Write-Host "            GESTION SERVIDOR FTP            " -ForegroundColor Magenta
         Write-Host "--------------------------------------------" -ForegroundColor Magenta
         Write-Host "  1. Instalacion completa (primera vez)     " -ForegroundColor Magenta
         Write-Host "  2. Inicializar directorios (primera vez)  " -ForegroundColor Magenta
