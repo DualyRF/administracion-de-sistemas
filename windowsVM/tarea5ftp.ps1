@@ -8,6 +8,7 @@ $RECURS_PATH   = "$GENERAL_PATH\recursadores"
 $SITE_NAME     = "MiFTP"
 $FTP_PORT      = 21
 $GROUPS        = @("reprobados", "recursadores")
+$ErrorActionPreference = "Stop"
 
 # -----------------------------------------------------------------------------
 #  FUNCIONES DE UTILIDAD
@@ -510,12 +511,12 @@ function menuPrincipalFTP {
         Write-Host "--------------------------------------------" -ForegroundColor Magenta
         Write-Host "            GESTION SERVIDOR FTP            " -ForegroundColor Magenta
         Write-Host "--------------------------------------------" -ForegroundColor Magenta
-        Write-Host "  1. Instalacion completa (primera vez)     " -ForegroundColor Magenta
-        Write-Host "  2. Inicializar directorios (primera vez)  " -ForegroundColor Magenta
-        Write-Host "  3. Crear usuarios                         " -ForegroundColor Magenta
-        Write-Host "  4. Cambiar grupo a un usuario             " -ForegroundColor Magenta
-        Write-Host "  5. Ver estado y diagnostico               " -ForegroundColor Magenta
-        Write-Host "  6. Salir                                  " -ForegroundColor Magenta
+        Write-Host "  1. Instalacion completa (primera vez)     " 
+        Write-Host "  2. Inicializar directorios (primera vez)  " 
+        Write-Host "  3. Crear usuarios                         " 
+        Write-Host "  4. Cambiar grupo a un usuario             " 
+        Write-Host "  5. Ver estado y diagnostico               " 
+        Write-Host "  6. Salir                                  " 
         Write-Host "--------------------------------------------" -ForegroundColor Magenta
         Write-Host ""
 
