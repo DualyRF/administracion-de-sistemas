@@ -251,27 +251,31 @@ function crearUsuarioFTP {
         [string]$Group
     )
 
-    # 1. Crear usuario local (idempotente)
     if (-not (Get-LocalUser -Name $Username -ErrorAction SilentlyContinue)) {
+        # Desactivar politica de complejidad temporalmente para permitir cualquier contrasena
         $secPwd = ConvertTo-SecureString $Password -AsPlainText -Force
-        New-LocalUser -Name $Username `
-            -Password $secPwd `
-            -PasswordNeverExpires `
-            -UserMayNotChangePassword | Out-Null
-        Write-Log "Usuario '$Username' creado." "OK"
+        try {
+            New-LocalUser -Name $Username `
+                -Password $secPwd `
+                -PasswordNeverExpires `
+                -UserMayNotChangePassword | Out-Null
+            Write-Log "Usuario '$Username' creado." "OK"
+        } catch {
+            Write-Log "Error al crear '$Username': $_" "Error"
+            return
+        }
+        # Esperar a que Windows propague el usuario antes de usarlo en ACLs
+        Start-Sleep -Seconds 2
     } else {
         Write-Log "Usuario '$Username' ya existe. Se actualizara su grupo." "Warn"
     }
 
-    # 2. Asegurar que no este en el grupo contrario
     $otherGroup = if ($Group -eq "reprobados") { "recursadores" } else { "reprobados" }
     Remove-LocalGroupMember -Group $otherGroup -Member $Username -ErrorAction SilentlyContinue
 
-    # 3. Agregar al grupo correcto
     Add-LocalGroupMember -Group $Group -Member $Username -ErrorAction SilentlyContinue
     Write-Log "Usuario '$Username' asignado al grupo '$Group'." "OK"
 
-    # 4. Crear carpeta personal
     $groupFolder = if ($Group -eq "reprobados") { $REPROB_PATH } else { $RECURS_PATH }
     $userFolder  = "$groupFolder\$Username"
 
@@ -280,12 +284,14 @@ function crearUsuarioFTP {
         Write-Log "Carpeta personal creada: $userFolder" "OK"
     }
 
-    # 5. Permisos NTFS en carpeta personal: solo ese usuario
     $acl = Get-Acl $userFolder
-    $acl.SetAccessRuleProtection($true, $false)   # herencia rota, sin copiar reglas
+    $acl.SetAccessRuleProtection($true, $false)
+
+    # Usar nombre completo SERVIDOR\usuario para resolver el SID correctamente
+    $fullUsername = "$env:COMPUTERNAME\$Username"
 
     $ruleOwner = New-Object System.Security.AccessControl.FileSystemAccessRule(
-        $Username,
+        $fullUsername,
         "FullControl",
         "ContainerInherit,ObjectInherit",
         "None",
@@ -293,7 +299,6 @@ function crearUsuarioFTP {
     )
     $acl.AddAccessRule($ruleOwner)
 
-    # Administradores siempre tienen control total
     $ruleAdmin = New-Object System.Security.AccessControl.FileSystemAccessRule(
         "Administrators",
         "FullControl",
@@ -305,7 +310,6 @@ function crearUsuarioFTP {
     Set-Acl -Path $userFolder -AclObject $acl
     Write-Log "Permisos NTFS asignados en carpeta personal '$userFolder'." "OK"
 
-    # 6. Regla de autorizacion FTP para carpeta personal
     reglaAutorizacionFTP `
         -SubPath "general/$Group/$Username" `
         -Users $Username `
@@ -317,7 +321,7 @@ function crearUsuarioFTP {
 # -----------------------------------------------------------------------------
 
 function cambioDeGrupo {
- param(
+    param(
         [string]$Username,
         [string]$gruponv
     )
@@ -325,36 +329,52 @@ function cambioDeGrupo {
     # Normalizar: quitar prefijo SERVIDOR\ si el usuario lo incluyo
     $Username = $Username -replace "^.*\\", ""
 
-    # Busca en cuál grupo está realmente el usuario
-    $grupovj = $null
-    foreach ($g in $GROUPS) {
-        $members = Get-LocalGroupMember -Group $g -ErrorAction SilentlyContinue
-        $encontrado = $members | Where-Object {
-            ($_.Name -replace "^.*\\", "") -eq $Username
-        }
-        if ($encontrado) { $grupovj = $g; break }
-    }
-
-    $carpetavj   = if ($grupovj -eq "reprobados") { "$REPROB_PATH\$Username" } else { "$RECURS_PATH\$Username" }
-    $carpetanv   = if ($gruponv -eq "reprobados") { "$REPROB_PATH\$Username" } else { "$RECURS_PATH\$Username" }
-
     # Verificar que el usuario existe
     if (-not (Get-LocalUser -Name $Username -ErrorAction SilentlyContinue)) {
         Write-Log "Usuario '$Username' no encontrado." "Error"
         return
     }
 
-    Write-Log "Moviendo '$Username' de '$grupovj' a '$gruponv'..." "Info"
+    # Detectar el grupo actual del usuario dinamicamente
+    # (no asumimos cual es - lo buscamos en los grupos)
+    $grupovj = $null
+    foreach ($g in $GROUPS) {
+        $members = Get-LocalGroupMember -Group $g -ErrorAction SilentlyContinue
+        $encontrado = $members | Where-Object {
+            ($_.Name -replace "^.*\\", "") -eq $Username
+        }
+        if ($encontrado) {
+            $grupovj = $g
+            break
+        }
+    }
+
+    # Informar lo que se detecto
+    if (-not $grupovj) {
+        Write-Log "El usuario '$Username' no esta en ningun grupo FTP." "Warn"
+        Write-Log "Se agregara directamente al grupo '$gruponv'." "Info"
+    } elseif ($grupovj -eq $gruponv) {
+        Write-Log "El usuario '$Username' ya esta en '$gruponv'. Nada que hacer." "Warn"
+        return
+    } else {
+        Write-Log "Grupo actual: '$grupovj' -> Nuevo grupo: '$gruponv'" "Info"
+    }
+
+    $carpetavj = if ($grupovj -eq "reprobados") { "$REPROB_PATH\$Username" } else { "$RECURS_PATH\$Username" }
+    $carpetanv = if ($gruponv -eq "reprobados") { "$REPROB_PATH\$Username" } else { "$RECURS_PATH\$Username" }
 
     # Cambiar grupos
-    Remove-LocalGroupMember -Group $grupovj -Member $Username -ErrorAction SilentlyContinue
-    Add-LocalGroupMember    -Group $gruponv -Member $Username -ErrorAction SilentlyContinue
-    Write-Log "Membresia de grupo actualizada." "OK"
+    if ($grupovj) {
+        Remove-LocalGroupMember -Group $grupovj -Member $Username -ErrorAction SilentlyContinue
+        Write-Log "Usuario removido de '$grupovj'." "OK"
+    }
+    Add-LocalGroupMember -Group $gruponv -Member $Username -ErrorAction SilentlyContinue
+    Write-Log "Usuario agregado a '$gruponv'." "OK"
 
     # Mover carpeta personal
-    if (Test-Path $carpetavj) {
+    if ($grupovj -and (Test-Path $carpetavj)) {
         if (Test-Path $carpetanv) {
-            Write-Log "La carpeta destino '$carpetanv' ya existe. Fusionando contenido..." "Warn"
+            Write-Log "Carpeta destino ya existe. Fusionando contenido..." "Warn"
             Get-ChildItem $carpetavj | Move-Item -Destination $carpetanv -Force
             Remove-Item $carpetavj -Recurse -Force
         } else {
@@ -362,17 +382,19 @@ function cambioDeGrupo {
         }
         Write-Log "Carpeta movida a: $carpetanv" "OK"
     } else {
-        # Si no existia, crearla en el nuevo grupo
-        New-Item -ItemType Directory -Path $carpetanv -Force | Out-Null
-        Write-Log "Carpeta personal creada en nuevo grupo: $carpetanv" "OK"
+        if (-not (Test-Path $carpetanv)) {
+            New-Item -ItemType Directory -Path $carpetanv -Force | Out-Null
+            Write-Log "Carpeta personal creada en: $carpetanv" "OK"
+        }
     }
 
     # Re-asignar permisos NTFS
     $acl = Get-Acl $carpetanv
     $acl.SetAccessRuleProtection($true, $false)
 
+    $fullUsername = "$env:COMPUTERNAME\$Username"
     $ruleOwner = New-Object System.Security.AccessControl.FileSystemAccessRule(
-        $Username, "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow"
+        $fullUsername, "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow"
     )
     $ruleAdmin = New-Object System.Security.AccessControl.FileSystemAccessRule(
         "Administrators", "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow"
