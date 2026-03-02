@@ -321,9 +321,9 @@ function cambioDeGrupo {
         [string]$NewGroup
     )
 
-    $OldGroup    = if ($NewGroup -eq "reprobados") { "recursadores" } else { "reprobados" }
-    $oldFolder   = if ($OldGroup -eq "reprobados") { "$REPROB_PATH\$Username" } else { "$RECURS_PATH\$Username" }
-    $newFolder   = if ($NewGroup -eq "reprobados") { "$REPROB_PATH\$Username" } else { "$RECURS_PATH\$Username" }
+    $grupovj    = if ($NewGroup -eq "reprobados") { "recursadores" } else { "reprobados" }
+    $carpetavj   = if ($grupovj -eq "reprobados") { "$REPROB_PATH\$Username" } else { "$RECURS_PATH\$Username" }
+    $carpetanv   = if ($NewGroup -eq "reprobados") { "$REPROB_PATH\$Username" } else { "$RECURS_PATH\$Username" }
 
     # Verificar que el usuario existe
     if (-not (Get-LocalUser -Name $Username -ErrorAction SilentlyContinue)) {
@@ -331,31 +331,31 @@ function cambioDeGrupo {
         return
     }
 
-    Write-Log "Moviendo '$Username' de '$OldGroup' a '$NewGroup'..." "Info"
+    Write-Log "Moviendo '$Username' de '$grupovj' a '$NewGroup'..." "Info"
 
     # Cambiar grupos
-    Remove-LocalGroupMember -Group $OldGroup -Member $Username -ErrorAction SilentlyContinue
+    Remove-LocalGroupMember -Group $grupovj -Member $Username -ErrorAction SilentlyContinue
     Add-LocalGroupMember    -Group $NewGroup -Member $Username -ErrorAction SilentlyContinue
     Write-Log "Membresia de grupo actualizada." "OK"
 
     # Mover carpeta personal
-    if (Test-Path $oldFolder) {
-        if (Test-Path $newFolder) {
-            Write-Log "La carpeta destino '$newFolder' ya existe. Fusionando contenido..." "Warn"
-            Get-ChildItem $oldFolder | Move-Item -Destination $newFolder -Force
-            Remove-Item $oldFolder -Recurse -Force
+    if (Test-Path $carpetavj) {
+        if (Test-Path $carpetanv) {
+            Write-Log "La carpeta destino '$carpetanv' ya existe. Fusionando contenido..." "Warn"
+            Get-ChildItem $carpetavj | Move-Item -Destination $carpetanv -Force
+            Remove-Item $carpetavj -Recurse -Force
         } else {
-            Move-Item -Path $oldFolder -Destination $newFolder
+            Move-Item -Path $carpetavj -Destination $carpetanv
         }
-        Write-Log "Carpeta movida a: $newFolder" "OK"
+        Write-Log "Carpeta movida a: $carpetanv" "OK"
     } else {
         # Si no existia, crearla en el nuevo grupo
-        New-Item -ItemType Directory -Path $newFolder -Force | Out-Null
-        Write-Log "Carpeta personal creada en nuevo grupo: $newFolder" "OK"
+        New-Item -ItemType Directory -Path $carpetanv -Force | Out-Null
+        Write-Log "Carpeta personal creada en nuevo grupo: $carpetanv" "OK"
     }
 
     # Re-asignar permisos NTFS
-    $acl = Get-Acl $newFolder
+    $acl = Get-Acl $carpetanv
     $acl.SetAccessRuleProtection($true, $false)
 
     $ruleOwner = New-Object System.Security.AccessControl.FileSystemAccessRule(
@@ -366,8 +366,8 @@ function cambioDeGrupo {
     )
     $acl.AddAccessRule($ruleOwner)
     $acl.AddAccessRule($ruleAdmin)
-    Set-Acl -Path $newFolder -AclObject $acl
-    Write-Log "Permisos NTFS actualizados en '$newFolder'." "OK"
+    Set-Acl -Path $carpetanv -AclObject $acl
+    Write-Log "Permisos NTFS actualizados en '$carpetanv'." "OK"
 
     Write-Log "Usuario '$Username' movido exitosamente al grupo '$NewGroup'." "OK"
 }
