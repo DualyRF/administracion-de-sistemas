@@ -18,20 +18,20 @@ function Write-Log {
         [string]$Message,
         [ValidateSet("Info","OK","Warn","Error")][string]$Level = "Info"
     )
-    $colors = @{ Info = "White"; OK = "Green"; Warn = "Yellow"; Error = "Red" }
-    $prefix = @{ Info = "[INFO]"; OK = "[ OK ]"; Warn = "[WARN]"; Error = "[ERR ]" }
-    Write-Host "$(Get-Date -Format 'HH:mm:ss') $($prefix[$Level]) $Message" -ForegroundColor $colors[$Level]
+    $color = @{ Info = "White"; OK = "Green"; Warn = "Yellow"; Error = "Red" }
+    $texto = @{ Info = "[INFO]"; OK = "[ OK ]"; Warn = "[WARN]"; Error = "[ERR ]" }
+    Write-Host "$(Get-Date -Format 'HH:mm:ss') $($texto[$Level]) $Message" -ForegroundColor $color[$Level]
 }
 
-function Write-Section {
+function titulos {
     param([string]$Title)
     Write-Host ""
-    Write-Host "===================================================" -ForegroundColor Cyan
+    Write-Host "--------------------------------------------" -ForegroundColor Cyan
     Write-Host "  $Title" -ForegroundColor Cyan
-    Write-Host "===================================================" -ForegroundColor Cyan
+    Write-Host "--------------------------------------------" -ForegroundColor Cyan
 }
 
-function Confirm-Prompt {
+function confirmaciones {
     param([string]$Question)
     $r = Read-Host "$Question (s/n)"
     return $r -match '^[sS]$'
@@ -42,7 +42,7 @@ function Confirm-Prompt {
 # -----------------------------------------------------------------------------
 
 function instalarFTP {
-    Write-Section "INSTALACION DE IIS + FTP SERVER"
+    titulos "INSTALACION DE IIS + FTP SERVER"
 
     $features = @("Web-Server", "Web-Ftp-Server", "Web-Ftp-Service", "Web-Mgmt-Console")
 
@@ -77,7 +77,7 @@ function instalarFTP {
 # -----------------------------------------------------------------------------
 
 function inicializarDirectorios {
-    Write-Section "CREANDO ESTRUCTURA DE CARPETAS"
+    titulos "CREANDO ESTRUCTURA DE CARPETAS"
 
     $dirs = @($FTP_ROOT, $GENERAL_PATH, $REPROB_PATH, $RECURS_PATH)
     foreach ($dir in $dirs) {
@@ -95,7 +95,7 @@ function inicializarDirectorios {
 # -----------------------------------------------------------------------------
 
 function inicializarGrupos {
-    Write-Section "CREANDO GRUPOS LOCALES"
+    titulos "CREANDO GRUPOS LOCALES"
 
     foreach ($group in $GROUPS) {
         if (-not (Get-LocalGroup -Name $group -ErrorAction SilentlyContinue)) {
@@ -144,7 +144,7 @@ function reglaAutorizacionFTP {
 }
 
 function inicializarSitio {
-    Write-Section "CONFIGURANDO SITIO FTP EN IIS"
+    titulos "CONFIGURANDO SITIO FTP EN IIS"
 
     # Recrear el sitio si ya existe
     if (Get-WebSite -Name $SITE_NAME -ErrorAction SilentlyContinue) {
@@ -198,7 +198,7 @@ function inicializarSitio {
 # -----------------------------------------------------------------------------
 
 function permisosBase {
-    Write-Section "ASIGNANDO PERMISOS NTFS BASE"
+    titulos "ASIGNANDO PERMISOS NTFS BASE"
 
     # /general: todos los usuarios autenticados pueden leer y escribir
     foreach ($folder in @($GENERAL_PATH, $REPROB_PATH, $RECURS_PATH)) {
@@ -380,7 +380,7 @@ function cambioDeGrupo {
 # -----------------------------------------------------------------------------
 
 function crearUsuario {
-    Write-Section "CREACION DE USUARIOS FTP"
+    titulos "CREACION DE USUARIOS FTP"
 
     $n = 0
     do {
@@ -411,7 +411,7 @@ function crearUsuario {
 }
 
 function menuCambioGrupo {
-    Write-Section "CAMBIO DE GRUPO DE USUARIO"
+    titulos "CAMBIO DE GRUPO DE USUARIO"
 
     # Mostrar usuarios existentes por grupo para referencia
     Write-Host ""
@@ -445,7 +445,7 @@ function menuCambioGrupo {
 # -----------------------------------------------------------------------------
 
 function mostrarEstadoFTP {
-    Write-Section "ESTADO DEL SERVIDOR FTP"
+    titulos "ESTADO DEL SERVIDOR FTP"
 
     # Estado del servicio Windows
     $svc = Get-Service -Name "ftpsvc" -ErrorAction SilentlyContinue
@@ -465,7 +465,7 @@ function mostrarEstadoFTP {
         Write-Host "  Puerto        : $FTP_PORT"
     }
 
-    Write-Section "USUARIOS Y GRUPOS FTP"
+    titulos "USUARIOS Y GRUPOS FTP"
     foreach ($group in $GROUPS) {
         Write-Host ""
         Write-Host "  Grupo: $group" -ForegroundColor Yellow
@@ -477,7 +477,7 @@ function mostrarEstadoFTP {
         }
     }
 
-    Write-Section "ESTRUCTURA DE CARPETAS"
+    titulos "ESTRUCTURA DE CARPETAS"
     if (Test-Path $FTP_ROOT) {
         Get-ChildItem $FTP_ROOT -Recurse -Directory | ForEach-Object {
             $depth  = ($_.FullName.Split('\').Count - $FTP_ROOT.Split('\').Count)
