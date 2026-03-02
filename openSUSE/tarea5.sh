@@ -19,47 +19,27 @@ readonly GRUPO_REPROBADOS="reprobados"
 readonly GRUPO_RECURSADORES="recursadores"
 readonly INTERFAZ_RED="enp0s9"
 
-# ============================================================================
-# FUNCIÓN: Mostrar ayuda
-# ============================================================================
+
+# Mostrar menú con los comandos para ayuda
 ayuda() {
     echo "Uso del script: $0"
     echo "Opciones:"
-    echo -e "  -v, --verify       Verifica si está instalado vsftpd"
-    echo -e "  -i, --install      Instala y configura el servidor FTP"
-    echo -e "  -u, --users        Gestionar usuarios FTP"
-    echo -e "  -r, --restart      Reiniciar servidor FTP"
-    echo -e "  -s, --status       Verificar estado del servidor FTP"
-    echo -e "  -l, --list         Listar usuarios y estructura FTP"
-    echo -e "  -?, --help         Muestra esta ayuda"
+    echo -e "  -v, --verify       Verifica si esta instalado VSFTPD"
+    echo -e "  -i, --install      Instala / Configura el servidor FTP"
+    echo -e "  -u, --users        Gestionar a los usuarios FTP"
+    echo -e "  -r, --restart      Reiniciar el servidor FTP"
+    echo -e "  -s, --status       Verificar el estado del servidor FTP"
+    echo -e "  -l, --list         Mostrar usuarios y estructura FTP"
+    echo -e "  -?, --help         Muestra este menu"
 }
 
-# ============================================================================
-# FUNCIÓN: Verificar instalación de vsftpd
-# ============================================================================
-verificar_Instalacion() {
-    print_info "Verificando instalación de vsftpd"
-    
-    if rpm -q $PAQUETE &>/dev/null; then
-        local version=$(rpm -q $PAQUETE --queryformat '%{VERSION}')
-        print_success "vsftpd ya está instalado (versión: $version)"
-        return 0
-    fi
-    
-    if command -v vsftpd &>/dev/null; then
-        local version=$(vsftpd -v 2>&1 | head -1)
-        print_success "vsftpd encontrado: $version"
-        return 0
-    fi
-    
-    print_warning "vsftpd no está instalado"
-    return 1
-}
 
-# ============================================================================
-# FUNCIÓN: Crear estructura de directorios base
-# ============================================================================
-crear_Estructura_Base() {
+# -------------
+# Funciones para la base del servidor FTP
+# -------------
+
+# Crear estructura de directorios base
+crearBase() {
     print_info "Creando estructura de directorios FTP..."
     
     # Crear directorio raíz FTP si no existe
@@ -97,10 +77,8 @@ crear_Estructura_Base() {
     print_success "Estructura de directorios base configurada"
 }
 
-# ============================================================================
-# FUNCIÓN: Crear grupos del sistema
-# ============================================================================
-crear_Grupos() {
+# Crear grupos del sistema
+crearGrupos() {
     print_info "Verificando grupos del sistema..."
     
     # Crear grupo reprobados si no existe
@@ -126,97 +104,11 @@ crear_Grupos() {
     print_success "Grupos configurados correctamente"
 }
 
-# ============================================================================
-# FUNCIÓN: Configurar vsftpd
-# ============================================================================
-configurar_Vsftpd() {
-    print_info "Configurando vsftpd..."
-    
-    # Backup del archivo de configuración original
-    if [ -f "$VSFTPD_CONF" ]; then
-        sudo cp "$VSFTPD_CONF" "${VSFTPD_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
-        print_info "Backup de configuración creado"
-    fi
-    
-    # Crear nueva configuración
-    sudo tee "$VSFTPD_CONF" > /dev/null << 'EOF'
-# Configuración vsftpd - Servidor FTP Seguro
-# Generado automáticamente
+# -------------
+# Funciones para instalar y configurar servidor FTP
+# -------------
 
-# Configuración básica
-listen=YES
-listen_ipv6=NO
-
-# Usuarios locales
-local_enable=YES
-write_enable=YES
-local_umask=022
-
-# Usuario anónimo
-anonymous_enable=YES
-anon_root=/srv/ftp/general
-no_anon_password=YES
-anon_upload_enable=NO
-anon_mkdir_write_enable=NO
-anon_other_write_enable=NO
-
-# Enjaulado de usuarios (chroot)
-chroot_local_user=YES
-allow_writeable_chroot=YES
-user_sub_token=$USER
-local_root=/srv/ftp
-
-# Seguridad
-seccomp_sandbox=NO
-hide_ids=YES
-use_localtime=YES
-
-# Permisos de archivos
-file_open_mode=0666
-local_umask=022
-
-# Logging
-xferlog_enable=YES
-xferlog_file=/var/log/vsftpd.log
-log_ftp_protocol=YES
-
-# Configuración de conexión
-connect_from_port_20=YES
-idle_session_timeout=600
-data_connection_timeout=120
-
-# Banner
-ftpd_banner=Bienvenido al servidor FTP - Acceso restringido
-
-# Activar modo pasivo
-pasv_enable=YES
-pasv_min_port=40000
-pasv_max_port=40100
-
-# Lista de usuarios permitidos
-userlist_enable=YES
-userlist_deny=NO
-userlist_file=/etc/vsftpd.user_list
-
-# SSL/TLS (Opcional - descomentar si se desea)
-# ssl_enable=YES
-# rsa_cert_file=/etc/ssl/certs/vsftpd.pem
-# rsa_private_key_file=/etc/ssl/private/vsftpd.key
-EOF
-
-    print_success "Archivo de configuración vsftpd creado"
-    
-    # Crear archivo de lista de usuarios vacío
-    if [ ! -f /etc/vsftpd.user_list ]; then
-        sudo touch /etc/vsftpd.user_list
-        print_success "Archivo de lista de usuarios creado"
-    fi
-}
-
-# ============================================================================
-# FUNCIÓN: Instalar y configurar servidor FTP
-# ============================================================================
-instalar_FTP() {
+instalarFTP() {
     print_titulo "Instalación y Configuración de Servidor FTP"
     
     # 1. Verificar si vsftpd ya está instalado
@@ -247,15 +139,15 @@ instalar_FTP() {
     echo ""
     
     # 2. Crear grupos del sistema
-    crear_Grupos
+    crearGrupos
     echo ""
     
     # 3. Crear estructura de directorios
-    crear_Estructura_Base
+    crearBase
     echo ""
     
     # 4. Configurar vsftpd
-    configurar_Vsftpd
+    configurarVSFTPD
     echo ""
     
     # 5. Habilitar y activar el servicio
@@ -349,9 +241,159 @@ instalar_FTP() {
     print_info "Ahora puede crear usuarios con: $0 -u"
 }
 
-# ============================================================================
-# FUNCIÓN: Validar nombre de usuario
-# ============================================================================
+reiniciarFTP() {
+    print_info "Reiniciando servidor FTP..."
+    
+    if ! systemctl is-active --quiet vsftpd; then
+        print_warning "El servicio vsftpd no está activo"
+        read -p "¿Desea iniciarlo en lugar de reiniciarlo? (y/n): " opc
+        if [[ "$opc" = "y" ]]; then
+            sudo systemctl start vsftpd
+        else
+            return 1
+        fi
+    else
+        sudo systemctl restart vsftpd
+    fi
+    
+    if systemctl is-active --quiet vsftpd; then
+        print_success "Servidor vsftpd reiniciado correctamente"
+        sudo systemctl status vsftpd --no-pager
+    else
+        print_warning "Error al reiniciar el servidor vsftpd"
+        print_info "Ejecute: sudo journalctl -xeu vsftpd.service"
+    fi
+}
+
+# Ver estado del servidor
+verEstadoServ() {
+    print_titulo "ESTADO DEL SERVIDOR FTP"
+    sudo systemctl status vsftpd --no-pager
+    echo ""
+    
+    print_info "Conexiones FTP activas:"
+    sudo ss -tnp | grep :21 || echo "  No hay conexiones activas"
+    
+    echo ""
+    local ip=$(ip addr show $INTERFAZ_RED 2>/dev/null | grep 'inet ' | awk '{print $2}' | cut -d'/' -f1)
+    if [ -n "$ip" ]; then
+        print_info "IP de la interfaz $INTERFAZ_RED: $ip"
+    else
+        print_warning "No se pudo obtener la IP de $INTERFAZ_RED"
+    fi
+}
+
+# Configurar vsftpd
+configurarVSFTPD() {
+    print_info "Configurando vsftpd..."
+    
+    # Backup del archivo de configuración original
+    if [ -f "$VSFTPD_CONF" ]; then
+        sudo cp "$VSFTPD_CONF" "${VSFTPD_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+        print_info "Backup de configuración creado"
+    fi
+    
+    # Crear nueva configuración
+    sudo tee "$VSFTPD_CONF" > /dev/null << 'EOF'
+# Configuración vsftpd - Servidor FTP Seguro
+# Generado automáticamente
+
+# Configuración básica
+listen=YES
+listen_ipv6=NO
+
+# Usuarios locales
+local_enable=YES
+write_enable=YES
+local_umask=022
+
+# Usuario anónimo
+anonymous_enable=YES
+anon_root=/srv/ftp/general
+no_anon_password=YES
+anon_upload_enable=NO
+anon_mkdir_write_enable=NO
+anon_other_write_enable=NO
+
+# Enjaulado de usuarios (chroot)
+chroot_local_user=YES
+allow_writeable_chroot=YES
+user_sub_token=$USER
+local_root=/srv/ftp
+
+# Seguridad
+seccomp_sandbox=NO
+hide_ids=YES
+use_localtime=YES
+
+# Permisos de archivos
+file_open_mode=0666
+local_umask=022
+
+# Logging
+xferlog_enable=YES
+xferlog_file=/var/log/vsftpd.log
+log_ftp_protocol=YES
+
+# Configuración de conexión
+connect_from_port_20=YES
+idle_session_timeout=600
+data_connection_timeout=120
+
+# Banner
+ftpd_banner=Bienvenido al servidor FTP - Acceso restringido
+
+# Activar modo pasivo
+pasv_enable=YES
+pasv_min_port=40000
+pasv_max_port=40100
+
+# Lista de usuarios permitidos
+userlist_enable=YES
+userlist_deny=NO
+userlist_file=/etc/vsftpd.user_list
+
+# SSL/TLS (Opcional - descomentar si se desea)
+# ssl_enable=YES
+# rsa_cert_file=/etc/ssl/certs/vsftpd.pem
+# rsa_private_key_file=/etc/ssl/private/vsftpd.key
+EOF
+
+    print_success "Archivo de configuración vsftpd creado"
+    
+    # Crear archivo de lista de usuarios vacío
+    if [ ! -f /etc/vsftpd.user_list ]; then
+        sudo touch /etc/vsftpd.user_list
+        print_success "Archivo de lista de usuarios creado"
+    fi
+}
+
+# Verificar instalación de vsftpd
+verificar_Instalacion() {
+    print_info "Verificando instalación de vsftpd"
+    
+    if rpm -q $PAQUETE &>/dev/null; then
+        local version=$(rpm -q $PAQUETE --queryformat '%{VERSION}')
+        print_success "vsftpd ya está instalado (versión: $version)"
+        return 0
+    fi
+    
+    if command -v vsftpd &>/dev/null; then
+        local version=$(vsftpd -v 2>&1 | head -1)
+        print_success "vsftpd encontrado: $version"
+        return 0
+    fi
+    
+    print_warning "vsftpd no está instalado"
+    return 1
+}
+
+
+# -------------
+# Funciones para ajustes de los usuarios
+# -------------
+
+# Validar nombre de usuario
 validar_Usuario() {
     local usuario="$1"
     
@@ -383,9 +425,7 @@ validar_Usuario() {
     return 0
 }
 
-# ============================================================================
-# FUNCIÓN: Validar contraseña
-# ============================================================================
+# Validar contraseña
 validar_Contrasena() {
     local password="$1"
     
@@ -398,9 +438,7 @@ validar_Contrasena() {
     return 0
 }
 
-# ============================================================================
-# FUNCIÓN: Crear usuario FTP
-# ============================================================================
+# Crear usuario FTP
 crear_Usuario_FTP() {
     local usuario="$1"
     local password="$2"
@@ -459,9 +497,7 @@ crear_Usuario_FTP() {
     return 0
 }
 
-# ============================================================================
-# FUNCIÓN: Cambiar usuario de grupo
-# ============================================================================
+# Cambiar usuario de grupo
 cambiar_Grupo_Usuario() {
     local usuario="$1"
     
@@ -513,9 +549,7 @@ cambiar_Grupo_Usuario() {
     fi
 }
 
-# ============================================================================
-# FUNCIÓN: Gestionar usuarios FTP
-# ============================================================================
+# Gestionar usuarios FTP
 gestionar_Usuarios() {
     print_titulo "Gestión de Usuarios FTP"
     
@@ -661,9 +695,7 @@ gestionar_Usuarios() {
     esac
 }
 
-# ============================================================================
-# FUNCIÓN: Listar usuarios FTP
-# ============================================================================
+# Mostrar los usuarios FTP
 listar_Usuarios_FTP() {
     print_titulo "Usuarios FTP Configurados"
     
@@ -691,10 +723,8 @@ listar_Usuarios_FTP() {
     echo ""
 }
 
-# ============================================================================
-# FUNCIÓN: Listar estructura FTP
-# ============================================================================
-listar_Estructura() {
+# Mostrar la estructura FTP
+mostrarEstructura() {
     print_titulo "Estructura del Servidor FTP"
     
     if [ ! -d "$FTP_ROOT" ]; then
@@ -723,71 +753,24 @@ listar_Estructura() {
     listar_Usuarios_FTP
 }
 
-# ============================================================================
-# FUNCIÓN: Reiniciar servicio FTP
-# ============================================================================
-reiniciar_FTP() {
-    print_info "Reiniciando servidor FTP..."
-    
-    if ! systemctl is-active --quiet vsftpd; then
-        print_warning "El servicio vsftpd no está activo"
-        read -p "¿Desea iniciarlo en lugar de reiniciarlo? (y/n): " opc
-        if [[ "$opc" = "y" ]]; then
-            sudo systemctl start vsftpd
-        else
-            return 1
-        fi
-    else
-        sudo systemctl restart vsftpd
-    fi
-    
-    if systemctl is-active --quiet vsftpd; then
-        print_success "Servidor vsftpd reiniciado correctamente"
-        sudo systemctl status vsftpd --no-pager
-    else
-        print_warning "Error al reiniciar el servidor vsftpd"
-        print_info "Ejecute: sudo journalctl -xeu vsftpd.service"
-    fi
-}
 
-# ============================================================================
-# FUNCIÓN: Ver estado del servidor
-# ============================================================================
-ver_Estado() {
-    print_titulo "ESTADO DEL SERVIDOR FTP"
-    sudo systemctl status vsftpd --no-pager
-    echo ""
-    
-    print_info "Conexiones FTP activas:"
-    sudo ss -tnp | grep :21 || echo "  No hay conexiones activas"
-    
-    echo ""
-    local ip=$(ip addr show $INTERFAZ_RED 2>/dev/null | grep 'inet ' | awk '{print $2}' | cut -d'/' -f1)
-    if [ -n "$ip" ]; then
-        print_info "IP de la interfaz $INTERFAZ_RED: $ip"
-    else
-        print_warning "No se pudo obtener la IP de $INTERFAZ_RED"
-    fi
-}
 
-# ============================================================================
 # VERIFICAR PERMISOS DE ROOT
-# ============================================================================
 if [[ $EUID -ne 0 ]]; then
     print_warning "Este script debe ejecutarse como root o con sudo"
     exit 1
 fi
 
 # ============================================================================
-# PROCESAMIENTO DE ARGUMENTOS
+# ARGUMENTOS (Main)
 # ============================================================================
 case $1 in
     -v | --verify)  verificar_Instalacion ;;
-    -i | --install) instalar_FTP ;;
+    -i | --install) instalarFTP ;;
     -u | --users)   gestionar_Usuarios ;;
-    -s | --status)  ver_Estado ;;
-    -r | --restart) reiniciar_FTP ;;
-    -l | --list)    listar_Estructura ;;
+    -s | --status)  verEstadoServ ;;
+    -r | --restart) reiniciarFTP ;;
+    -l | --list)    mostrarEstructura ;;
     -? | --help)    ayuda ;;
     *)              ayuda ;;
 esac
