@@ -495,6 +495,7 @@ function mostrarEstadoFTP {
 
 function menuPrincipalFTP {
     do {
+        Start-Sleep -Seconds 5
         Clear-Host
         Write-Host ""
         Write-Host "--------------------------------------------" -ForegroundColor Magenta
