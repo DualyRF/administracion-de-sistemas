@@ -8,7 +8,7 @@ $RECURS_PATH   = "$GENERAL_PATH\recursadores"
 $SITE_NAME     = "MiFTP"
 $FTP_PORT      = 21
 $GROUPS        = @("reprobados", "recursadores")
-$ErrorActionPreference = "Stop"
+$LOCAL_USER = "$FTP_ROOT\LocalUser"
 
 # -----------------------------------------------------------------------------
 #  FUNCIONES DE UTILIDAD
@@ -36,6 +36,11 @@ function confirmaciones {
     param([string]$Question)
     $r = Read-Host "$Question (s/n)"
     return $r -match '^[sS]$'
+}
+
+function Get-AdminGroupName {
+    $sid = New-Object System.Security.Principal.SecurityIdentifier("S-1-5-32-544")
+    return $sid.Translate([System.Security.Principal.NTAccount]).Value
 }
 
 # -----------------------------------------------------------------------------
@@ -79,16 +84,14 @@ function instalarFTP {
 
 function inicializarDirectorios {
     titulos "CREANDO ESTRUCTURA DE CARPETAS"
-
+    # Estructura plana para que todos la vean al entrar
     $dirs = @($FTP_ROOT, $GENERAL_PATH, $REPROB_PATH, $RECURS_PATH)
     foreach ($dir in $dirs) {
         if (-not (Test-Path $dir)) {
             New-Item -ItemType Directory -Path $dir -Force | Out-Null
-            Write-Log "Carpeta creada: $dir" "OK"
-        } else {
-            Write-Log "Carpeta ya existe: $dir" "Warn"
         }
     }
+    # Ya no necesitas LocalUser si desactivas el aislamiento
 }
 
 # -----------------------------------------------------------------------------
@@ -147,17 +150,15 @@ function reglaAutorizacionFTP {
 function inicializarSitio {
     titulos "CONFIGURANDO SITIO FTP EN IIS"
 
-    # Recrear el sitio si ya existe
     if (Get-WebSite -Name $SITE_NAME -ErrorAction SilentlyContinue) {
         Write-Log "Sitio '$SITE_NAME' ya existe. Eliminando para reconfigurar..." "Warn"
         Remove-WebSite -Name $SITE_NAME
     }
 
-    # Crear sitio FTP
     New-WebFtpSite -Name $SITE_NAME -Port $FTP_PORT -PhysicalPath $FTP_ROOT -Force | Out-Null
     Write-Log "Sitio FTP '$SITE_NAME' creado en puerto $FTP_PORT." "OK"
 
-    # Autenticacion basica (usuarios locales con usuario/contrasena)
+    # Autenticacion basica
     Set-ItemProperty "IIS:\Sites\$SITE_NAME" `
         -Name "ftpServer.security.authentication.basicAuthentication.enabled" `
         -Value $true
@@ -169,26 +170,24 @@ function inicializarSitio {
         -Value $true
     Write-Log "Acceso anonimo habilitado." "OK"
 
-    # SSL: permitir sin SSL (entorno de laboratorio)
+    # SSL desactivado (laboratorio)
     Set-ItemProperty "IIS:\Sites\$SITE_NAME" `
         -Name "ftpServer.security.ssl.controlChannelPolicy" -Value "SslAllow"
     Set-ItemProperty "IIS:\Sites\$SITE_NAME" `
-        -Name "ftpServer.security.ssl.dataChannelPolicy"    -Value "SslAllow"
+        -Name "ftpServer.security.ssl.dataChannelPolicy" -Value "SslAllow"
     Write-Log "Politica SSL configurada (SslAllow)." "OK"
 
-    # -- Reglas de autorizacion ------------------------------------------------
+    # User Isolation: cada usuario aterriza en LocalUser\<username> al conectarse
+    # Esto resuelve el error "530 home directory inaccessible"
+    Set-ItemProperty "IIS:\Sites\$SITE_NAME" `
+        -Name "ftpServer.userIsolation.mode" -Value 0
+    Write-Log "User Isolation DESACTIVADO (Modo 0). Los usuarios verán la raíz compartida." "OK"
 
-    # Anonimo: solo lectura en /general
-    reglaAutorizacionFTP -SubPath "general" -Users "anonymous" -Permission "Read"
+    # Reglas de autorizacion
+# Permite que todos los usuarios vean la lista de carpetas en la raíz
+    reglaAutorizacionFTP -SubPath "" -Users "*" -Permission "Read" 
+    reglaAutorizacionFTP -SubPath "general" -Roles "reprobados,recursadores" -Permission "Read,Write"
 
-    # Usuarios autenticados: escritura en /general
-    reglaAutorizacionFTP -SubPath "general" -Roles "reprobados,recursadores" -Permission "Read, Write"
-
-    # Grupos: escritura en su carpeta de grupo
-    reglaAutorizacionFTP -SubPath "general/reprobados"   -Roles "reprobados"   -Permission "Read, Write"
-    reglaAutorizacionFTP -SubPath "general/recursadores" -Roles "recursadores" -Permission "Read, Write"
-
-    # Iniciar el sitio
     Start-WebItem "IIS:\Sites\$SITE_NAME" -ErrorAction SilentlyContinue
     Start-Service -Name "ftpsvc" -ErrorAction SilentlyContinue
     Write-Log "Servicio FTP iniciado." "OK"
@@ -199,45 +198,87 @@ function inicializarSitio {
 # -----------------------------------------------------------------------------
 
 function permisosBase {
-    titulos "ASIGNANDO PERMISOS NTFS BASE"
+    titulos "CONFIGURANDO AISLAMIENTO POR GRUPOS (NTFS)"
 
-    # /general: todos los usuarios autenticados pueden leer y escribir
-    foreach ($folder in @($GENERAL_PATH, $REPROB_PATH, $RECURS_PATH)) {
-        $acl = Get-Acl $folder
+    # 1. Ajuste para la carpeta GENERAL (El contenedor padre)
+    # Solo damos permiso de lectura en la raíz de /general para que vean las subcarpetas,
+    # pero NO heredamos el permiso de escritura a los hijos de forma automática.
+    $aclGen = Get-Acl $GENERAL_PATH
+    $aclGen.SetAccessRuleProtection($true, $true) # Rompe herencia pero mantiene Admins
+    
+    # "Authenticated Users" solo puede leer esta carpeta (para ver los nombres de los grupos)
+    $ruleGen = New-Object System.Security.AccessControl.FileSystemAccessRule("Authenticated Users", "ReadAndExecute", "None", "None", "Allow")
+    $aclGen.AddAccessRule($ruleGen)
+    Set-Acl $GENERAL_PATH $aclGen
 
-        # Usuarios autenticados: acceso de escritura
-        $ruleAuth = New-Object System.Security.AccessControl.FileSystemAccessRule(
-            "Authenticated Users",
-            "Modify",
-            "ContainerInherit,ObjectInherit",
-            "None",
-            "Allow"
-        )
-        $acl.AddAccessRule($ruleAuth)
+    # 2. Ajuste para las carpetas de GRUPO (Aislamiento Total)
+    $gruposRutas = @{
+        "reprobados"   = $REPROB_PATH
+        "recursadores" = $RECURS_PATH
+    }
 
-        # Anonimo (IUSR) en /general: solo lectura
-        if ($folder -eq $GENERAL_PATH) {
-            $ruleAnon = New-Object System.Security.AccessControl.FileSystemAccessRule(
-                "IUSR",
-                "ReadAndExecute",
-                "ContainerInherit,ObjectInherit",
-                "None",
-                "Allow"
-            )
-            $acl.AddAccessRule($ruleAnon)
+    foreach ($group in $gruposRutas.Keys) {
+        $path = $gruposRutas[$group]
+        $acl = Get-Acl $path
+
+        # IMPORTANTE: $true, $false elimina TODOS los permisos heredados (incluyendo Authenticated Users)
+        $acl.SetAccessRuleProtection($true, $false) 
+
+        # Solo entran Admins y el Grupo específico
+        $adminSid = New-Object System.Security.Principal.SecurityIdentifier("S-1-5-32-544")
+        $adminRule = New-Object System.Security.AccessControl.FileSystemAccessRule($adminSid, "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow")
+        $acl.AddAccessRule($adminRule)
+
+        $groupRule = New-Object System.Security.AccessControl.FileSystemAccessRule($group, "Modify", "ContainerInherit,ObjectInherit", "None", "Allow")
+        $acl.AddAccessRule($groupRule)
+
+        Set-Acl -Path $path -AclObject $acl
+        Write-Log "Aislamiento estricto: Solo '$group' puede entrar a $path" "OK"
+    }
+}
+
+# -----------------------------------------------------------------------------
+#  CREAR HOME DE USUARIO (estructura LocalUser requerida por IIS)
+# -----------------------------------------------------------------------------
+function crearHomeUsuario {
+    param(
+        [string]$Username,
+        [string]$Group
+    )
+
+    $adminName = Get-AdminGroupName
+    $fullUsername = "$env:COMPUTERNAME\$Username"
+
+    # Estructura: C:\FTP\LocalUser\<usuario>\general\<grupo>\<usuario>
+    $homeDir   = "$LOCAL_USER\$Username"
+    $groupLink = if ($Group -eq "reprobados") { "$homeDir\general\reprobados" } `
+                 else                         { "$homeDir\general\recursadores" }
+    $userDir   = "$groupLink\$Username"
+
+    # Crear toda la jerarquia de carpetas del home
+    foreach ($dir in @($homeDir, "$homeDir\general", $groupLink, $userDir)) {
+        if (-not (Test-Path $dir)) {
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            Write-Log "Carpeta creada: $dir" "OK"
         }
-
-        Set-Acl -Path $folder -AclObject $acl
-        Write-Log "Permisos NTFS aplicados en: $folder" "OK"
     }
 
-    # Quitar herencia de NTFS en /reprobados y /recursadores para aislar grupos
-    foreach ($groupFolder in @($REPROB_PATH, $RECURS_PATH)) {
-        $acl = Get-Acl $groupFolder
-        $acl.SetAccessRuleProtection($true, $true)   # romper herencia, conservar reglas actuales
-        Set-Acl -Path $groupFolder -AclObject $acl
-        Write-Log "Herencia NTFS desactivada en: $groupFolder" "OK"
-    }
+    # Permisos NTFS en el home del usuario: solo el usuario + admins
+    $acl = Get-Acl $homeDir
+    $acl.SetAccessRuleProtection($true, $false)
+
+    $ruleOwner = New-Object System.Security.AccessControl.FileSystemAccessRule(
+        $fullUsername, "FullControl",
+        "ContainerInherit,ObjectInherit", "None", "Allow"
+    )
+    $ruleAdmin = New-Object System.Security.AccessControl.FileSystemAccessRule(
+        $adminName, "FullControl",
+        "ContainerInherit,ObjectInherit", "None", "Allow"
+    )
+    $acl.AddAccessRule($ruleOwner)
+    $acl.AddAccessRule($ruleAdmin)
+    Set-Acl -Path $homeDir -AclObject $acl
+    Write-Log "Permisos NTFS asignados en home '$homeDir'." "OK"
 }
 
 # -----------------------------------------------------------------------------
@@ -251,69 +292,35 @@ function crearUsuarioFTP {
         [string]$Group
     )
 
+    # 1. Crear Usuario Local si no existe
     if (-not (Get-LocalUser -Name $Username -ErrorAction SilentlyContinue)) {
-        # Desactivar politica de complejidad temporalmente para permitir cualquier contrasena
         $secPwd = ConvertTo-SecureString $Password -AsPlainText -Force
-        try {
-            New-LocalUser -Name $Username `
-                -Password $secPwd `
-                -PasswordNeverExpires `
-                -UserMayNotChangePassword | Out-Null
-            Write-Log "Usuario '$Username' creado." "OK"
-        } catch {
-            Write-Log "Error al crear '$Username': $_" "Error"
-            return
-        }
-        # Esperar a que Windows propague el usuario antes de usarlo en ACLs
-        Start-Sleep -Seconds 2
-    } else {
-        Write-Log "Usuario '$Username' ya existe. Se actualizara su grupo." "Warn"
+        New-LocalUser -Name $Username -Password $secPwd -PasswordNeverExpires -UserMayNotChangePassword | Out-Null
+        Write-Log "Usuario '$Username' creado." "OK"
+        Start-Sleep -Seconds 1
     }
 
+    # 2. Gestionar pertenencia al grupo
     $otherGroup = if ($Group -eq "reprobados") { "recursadores" } else { "reprobados" }
     Remove-LocalGroupMember -Group $otherGroup -Member $Username -ErrorAction SilentlyContinue
-
     Add-LocalGroupMember -Group $Group -Member $Username -ErrorAction SilentlyContinue
-    Write-Log "Usuario '$Username' asignado al grupo '$Group'." "OK"
 
+    # 3. Crear Carpeta Personal (dentro del grupo)
     $groupFolder = if ($Group -eq "reprobados") { $REPROB_PATH } else { $RECURS_PATH }
     $userFolder  = "$groupFolder\$Username"
 
     if (-not (Test-Path $userFolder)) {
         New-Item -ItemType Directory -Path $userFolder -Force | Out-Null
-        Write-Log "Carpeta personal creada: $userFolder" "OK"
     }
 
+    # 4. Permisos NTFS: El usuario es dueño de su carpeta, pero el GRUPO tiene acceso por herencia
+    # (Esto permite que los del mismo grupo colaboren)
     $acl = Get-Acl $userFolder
-    $acl.SetAccessRuleProtection($true, $false)
-
-    # Usar nombre completo SERVIDOR\usuario para resolver el SID correctamente
-    $fullUsername = "$env:COMPUTERNAME\$Username"
-
-    $ruleOwner = New-Object System.Security.AccessControl.FileSystemAccessRule(
-        $fullUsername,
-        "FullControl",
-        "ContainerInherit,ObjectInherit",
-        "None",
-        "Allow"
-    )
+    $ruleOwner = New-Object System.Security.AccessControl.FileSystemAccessRule("$Username", "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow")
     $acl.AddAccessRule($ruleOwner)
-
-    $ruleAdmin = New-Object System.Security.AccessControl.FileSystemAccessRule(
-        "Administrators",
-        "FullControl",
-        "ContainerInherit,ObjectInherit",
-        "None",
-        "Allow"
-    )
-    $acl.AddAccessRule($ruleAdmin)
     Set-Acl -Path $userFolder -AclObject $acl
-    Write-Log "Permisos NTFS asignados en carpeta personal '$userFolder'." "OK"
 
-    reglaAutorizacionFTP `
-        -SubPath "general/$Group/$Username" `
-        -Users $Username `
-        -Permission "Read, Write"
+    Write-Log "Usuario '$Username' configurado en grupo '$Group'." "OK"
 }
 
 # -----------------------------------------------------------------------------
@@ -336,20 +343,15 @@ function cambioDeGrupo {
     }
 
     # Detectar el grupo actual del usuario dinamicamente
-    # (no asumimos cual es - lo buscamos en los grupos)
     $grupovj = $null
     foreach ($g in $GROUPS) {
         $members = Get-LocalGroupMember -Group $g -ErrorAction SilentlyContinue
         $encontrado = $members | Where-Object {
             ($_.Name -replace "^.*\\", "") -eq $Username
         }
-        if ($encontrado) {
-            $grupovj = $g
-            break
-        }
+        if ($encontrado) { $grupovj = $g; break }
     }
 
-    # Informar lo que se detecto
     if (-not $grupovj) {
         Write-Log "El usuario '$Username' no esta en ningun grupo FTP." "Warn"
         Write-Log "Se agregara directamente al grupo '$gruponv'." "Info"
@@ -360,6 +362,7 @@ function cambioDeGrupo {
         Write-Log "Grupo actual: '$grupovj' -> Nuevo grupo: '$gruponv'" "Info"
     }
 
+    # Rutas en estructura /general
     $carpetavj = if ($grupovj -eq "reprobados") { "$REPROB_PATH\$Username" } else { "$RECURS_PATH\$Username" }
     $carpetanv = if ($gruponv -eq "reprobados") { "$REPROB_PATH\$Username" } else { "$RECURS_PATH\$Username" }
 
@@ -371,39 +374,24 @@ function cambioDeGrupo {
     Add-LocalGroupMember -Group $gruponv -Member $Username -ErrorAction SilentlyContinue
     Write-Log "Usuario agregado a '$gruponv'." "OK"
 
-    # Mover carpeta personal
+    # Mover carpeta en /general
     if ($grupovj -and (Test-Path $carpetavj)) {
         if (Test-Path $carpetanv) {
-            Write-Log "Carpeta destino ya existe. Fusionando contenido..." "Warn"
             Get-ChildItem $carpetavj | Move-Item -Destination $carpetanv -Force
             Remove-Item $carpetavj -Recurse -Force
         } else {
             Move-Item -Path $carpetavj -Destination $carpetanv
         }
-        Write-Log "Carpeta movida a: $carpetanv" "OK"
+        Write-Log "Carpeta /general movida a: $carpetanv" "OK"
     } else {
         if (-not (Test-Path $carpetanv)) {
             New-Item -ItemType Directory -Path $carpetanv -Force | Out-Null
-            Write-Log "Carpeta personal creada en: $carpetanv" "OK"
         }
     }
 
-    # Re-asignar permisos NTFS
-    $acl = Get-Acl $carpetanv
-    $acl.SetAccessRuleProtection($true, $false)
+    # elimine lo de que la carpeta se elimine al cambiar de grupo
 
-    $fullUsername = "$env:COMPUTERNAME\$Username"
-    $ruleOwner = New-Object System.Security.AccessControl.FileSystemAccessRule(
-        $fullUsername, "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow"
-    )
-    $ruleAdmin = New-Object System.Security.AccessControl.FileSystemAccessRule(
-        "Administrators", "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow"
-    )
-    $acl.AddAccessRule($ruleOwner)
-    $acl.AddAccessRule($ruleAdmin)
-    Set-Acl -Path $carpetanv -AclObject $acl
-    Write-Log "Permisos NTFS actualizados en '$carpetanv'." "OK"
-
+    crearHomeUsuario -Username $Username -Group $gruponv
     Write-Log "Usuario '$Username' movido exitosamente al grupo '$gruponv'." "OK"
 }
 
@@ -527,7 +515,7 @@ function mostrarEstadoFTP {
 
 function menuPrincipalFTP {
     do {
-        Start-Sleep -Seconds 5
+        Start-Sleep -Seconds 3
         Clear-Host
         Write-Host ""
         Write-Host "--------------------------------------------" -ForegroundColor Magenta
@@ -549,15 +537,26 @@ function menuPrincipalFTP {
                 instalarFTP
                 permisosBase
                 Write-Log "Instalacion completada."
+                Read-Host "`nPresiona Enter para continuar"
             }
             "2" {
                 inicializarDirectorios
                 inicializarGrupos
                 inicializarSitio
+                Read-Host "`nPresiona Enter para continuar"
             }
-            "3" { crearUsuario }
-            "4" { menuCambioGrupo }
-            "5" { mostrarEstadoFTP }
+            "3" { 
+                crearUsuario
+                Read-Host "`nPresiona Enter para continuar" 
+            }
+            "4" { 
+                menuCambioGrupo 
+                Read-Host "`nPresiona Enter para continuar"
+            }
+            "5" { 
+                mostrarEstadoFTP 
+                Read-Host "`nPresiona Enter para continuar"
+            }
             "6" { Write-Host "Saliendo..."; return }
             default { Write-Log "Opcion no valida." "Warn" }
         }
