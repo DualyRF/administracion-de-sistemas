@@ -1,35 +1,61 @@
-Write-Host "Abriendo puerto 53 para consultas DNS..." -ForegroundColor Cyan
+$contenido = @'
+# ============================================================
+# menuHTTP.ps1 - Solo contiene el menu principal
+# ============================================================
 
-# Esta regla abre el puerto 53 para TCP y UDP (ambos necesarios para DNS)
-New-NetFirewallRule -DisplayName "DNS-UDP-In" -Direction Inbound -LocalPort 53 -Protocol UDP -Action Allow -ErrorAction SilentlyContinue
-New-NetFirewallRule -DisplayName "DNS-TCP-In" -Direction Inbound -LocalPort 53 -Protocol TCP -Action Allow -ErrorAction SilentlyContinue
+if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Host "[!] Debes ejecutar este script como Administrador." -ForegroundColor Red
+    exit 1
+}
 
-Write-Host "Puerto 53 abierto." -ForegroundColor Green
+$rutaFunciones = "$PSScriptRoot\librerias\funcionesHTTP.ps1"
+if (-not (Test-Path $rutaFunciones)) {
+    Write-Host "[!] Archivo no encontrado: $rutaFunciones" -ForegroundColor Red
+    exit 1
+}
+. $rutaFunciones
 
-#activar el puerto 53
-Get-NetTCPConnection -LocalPort 53 -ErrorAction SilentlyContinue
+function menuPrincipalHTTP {
+    do {
+        Clear-Host
+        Write-Host ""
+        Write-Host "-----------------------------------------" -ForegroundColor Blue
+        Write-Host "      GESTION DE SERVIDOR HTTP           " -ForegroundColor Blue
+        Write-Host "-----------------------------------------" -ForegroundColor Blue
+        Write-Host "  1. Instalar servidor HTTP"
+        Write-Host "  2. Gestionar servicios activos"
+        Write-Host "  3. Ver estado de puertos"
+        Write-Host "  4. Salir"
+        Write-Host "-----------------------------------------" -ForegroundColor Blue
+        Write-Host ""
 
-# copy para regresar la configuracion de red a dhcp para poder usar git
-# netsh interface ip set address "Ethernet" dhcp
-# netsh interface ip set dns "Ethernet" dhcp
+        $op = Read-Host "Selecciona una opcion"
 
-# Resolve-DnsName -Name www.jotelulu.com
+        switch ($op) {
+            "1" {
+                InstalarHTTP
+                Read-Host "`nEnter para continuar"
+            }
+            "2" {
+                Get-Service W3SVC,Apache24 -ErrorAction SilentlyContinue | Format-Table
+                Read-Host "`nEnter para continuar"
+            }
+            "3" {
+                netstat -ano | findstr "LISTENING"
+                Read-Host "`nEnter para continuar"
+            }
+            "4" { Write-Host "Saliendo..."; return }
+            default {
+                Write-Host "[!] Opcion no valida." -ForegroundColor Yellow
+                Start-Sleep -Seconds 1
+            }
+        }
+    } while ($true)
+}
 
-# Esto cambia la IP del Ethernet 2 a la .1
-Get-NetIPInterface -InterfaceAlias "Ethernet 2" | New-NetIPAddress -IPAddress 200.200.200.1 -PrefixLength 27 -DefaultGateway 200.200.200.1
+menuPrincipalHTTP
+'@
 
-# Desactiva el firewall para que el ping y el DNS pasen sin problemas
-Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
-
-
-# Borramos cualquier IP previa del Ethernet 2 y ponemos la buena
-Remove-NetIPAddress -InterfaceAlias "Ethernet 2" -Confirm:$false -ErrorAction SilentlyContinue
-New-NetIPAddress -InterfaceAlias "Ethernet 2" -IPAddress 200.200.200.1 -PrefixLength 27 -DefaultGateway 200.200.200.1
-
-# Esto quita el DHCP y le regresa su identidad
-Set-NetIPInterface -InterfaceAlias "Ethernet 2" -DHCP Disabled
-Netsh interface ip set address name="Ethernet 2" static 200.200.200.1 255.255.255.224 200.200.200.1
-
-
-Disable-NetAdapter -Name "Ethernet" -Confirm:$false
-Enable-NetAdapter -Name "Ethernet"
+$ruta = "C:\Users\Administrador\Desktop\administracion-de-sistemas\windowsVM\menuHTTP.ps1"
+[System.IO.File]::WriteAllText($ruta, $contenido, [System.Text.UTF8Encoding]::new($false))
+Write-Host "[+] Listo, archivo re-creado con encoding UTF-8 sin BOM" -ForegroundColor Green
