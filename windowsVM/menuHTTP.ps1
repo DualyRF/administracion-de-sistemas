@@ -7,7 +7,12 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
     exit 1
 }
 
-. ".librerias\funcionesHTTP.ps1"
+$rutaFunciones = "$PSScriptRoot\librerias\funcionesHTTP.ps1"
+if (-not (Test-Path $rutaFunciones)) {
+    Write-Host "[!] Archivo no encontrado: $rutaFunciones" -ForegroundColor Red
+    exit 1
+}
+. $rutaFunciones
 
 function menuPrincipalHTTP {
     do {
