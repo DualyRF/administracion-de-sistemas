@@ -135,7 +135,7 @@ function instalarApache {
     param([int]$puerto)
 
     Clear-Host
-    Write-Host "─── Instalacion de Apache HTTP Server ───" -ForegroundColor Magenta
+    Write-Host "--- Instalacion de Apache HTTP Server ---" -ForegroundColor Magenta
     Write-Host ""
 
     # Verificar que Chocolatey este instalado
@@ -261,13 +261,13 @@ function instalarIIS {
     param([int]$puerto)
 
     Clear-Host
-    Write-Host "─── Instalacion de IIS ───" -ForegroundColor Magenta
+    Write-Host "--- Instalacion de IIS ---" -ForegroundColor Magenta
     Write-Host ""
 
     # IIS no tiene versiones elegibles manualmente (depende del Windows)
     # Pero podemos mostrar la version del sistema y la de IIS disponible
     $winVer = (Get-WmiObject Win32_OperatingSystem).Caption
-    printInfo "Sistema: $winVer"
+    printInfo "Sistema actual: $winVer"
 
     # Determinar version IIS segun Windows
     $iisVersion = switch -Wildcard ($winVer) {
@@ -347,7 +347,7 @@ function instalarIIS {
 # USUARIO DEDICADO PARA IIS
 # ----------------
 function Configurar-UsuarioIIS {
-    Print-Info "Configurando usuario dedicado para IIS..."
+    printInfo "Configurando usuario dedicado para IIS..."
 
     $usuario = "iis_webuser"
     $rutaWeb = "C:\inetpub\wwwroot"
@@ -366,7 +366,7 @@ function Configurar-UsuarioIIS {
                 -Description "Usuario dedicado IIS - sin login interactivo" `
                 -PasswordNeverExpires $true `
                 -UserMayNotChangePassword $true | Out-Null
-            Print-OK "Usuario '$usuario' creado."
+            printOK "Usuario '$usuario' creado."
         }
 
         # Dar permisos SOLO sobre wwwroot (lectura)
@@ -376,10 +376,10 @@ function Configurar-UsuarioIIS {
         )
         $acl.SetAccessRule($regla)
         Set-Acl $rutaWeb $acl
-        Print-OK "Permisos configurados: '$usuario' solo puede leer $rutaWeb"
+        printOK "Permisos configurados: '$usuario' solo puede leer $rutaWeb"
 
     } catch {
-        Print-Warn "No se pudo crear usuario dedicado: $_"
+        printWarn "No se pudo crear usuario dedicado: $_"
     }
 }
 
@@ -390,7 +390,7 @@ function instalarSSH {
     param([int]$puerto)
 
     Clear-Host
-    Write-Host "─── Instalacion de simple-http-server ───" -ForegroundColor Magenta
+    Write-Host "--- Instalacion de simple-http-server ---" -ForegroundColor Magenta
     Write-Host ""
 
     # simple-http-server es un binario en Rust (cargo)
