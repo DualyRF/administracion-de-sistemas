@@ -23,14 +23,14 @@ function menuPrincipalHTTP {
     do {
         Clear-Host
         Write-Host ""
-        Write-Host "────────────────────────────────────────" -ForegroundColor Blue
+        Write-Host "-----------------------------------------" -ForegroundColor Blue
         Write-Host "       GESTIÓN DE SERVIDOR HTTP          " -ForegroundColor Blue
-        Write-Host "────────────────────────────────────────" -ForegroundColor Blue
+        Write-Host "-----------------------------------------" -ForegroundColor Blue
         Write-Host "  1. Instalar servidor HTTP"
         Write-Host "  2. Gestionar servicios activos"
         Write-Host "  3. Ver estado de puertos"
         Write-Host "  4. Salir"
-        Write-Host "────────────────────────────────────────" -ForegroundColor Blue
+        Write-Host "-----------------------------------------" -ForegroundColor Blue
         Write-Host ""
 
         $op = Read-Host "Selecciona una opcion"
@@ -50,7 +50,10 @@ function menuPrincipalHTTP {
             }
             "4" { Write-Host "Saliendo..."; return }
 
-            default { Write-Host "[!] Opcion no valida." -ForegroundColor Yellow; Start-Sleep -Seconds 1 }
+            default { 
+                Write-Host "[!] Opcion no valida." -ForegroundColor Yellow
+                Start-Sleep -Seconds 1 
+            }
         }
     } while ($true)
 }
