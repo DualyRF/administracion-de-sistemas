@@ -365,29 +365,44 @@ function instalarNginx {
     Write-Host "--- Instalacion de Nginx para Windows ---" -ForegroundColor Magenta
     Write-Host ""
 
-    # Consultar versiones desde nginx.org
-    printInfo "Consultando versiones desde nginx.org..."
+    # ── Consultar versiones disponibles dinamicamente ──
+    printInfo "Consultando versiones disponibles de Nginx..."
 
-    try {
-        $html = Invoke-WebRequest -Uri "https://nginx.org/en/download.html" -UseBasicParsing -TimeoutSec 10
-        
-        # Buscar versiones: patron nginx-X.XX.X
-        $matchesStable  = [regex]::Matches($html.Content, 'nginx-(\d+\.\d+\.\d+)\.zip')
-        $versiones = $matchesStable | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique -Descending
+    $rawVersiones = choco search nginx --exact --all-versions --limit-output 2>$null
 
-    } catch {
-        printWarn "No se pudo conectar. Usando versiones conocidas..."
-        $versiones = @("1.27.4", "1.26.3", "1.24.0")
+    $versiones = @()
+    foreach ($linea in $rawVersiones) {
+        if ($linea -match '\|') {
+            $ver = ($linea -split '\|')[1].Trim()
+            if ($versiones -notcontains $ver) { $versiones += $ver }
+        }
     }
 
-    # Separar mainline (desarrollo, impar) de stable (par)
-    $mainline = $versiones | Where-Object { ($_ -split '\.')[1] % 2 -ne 0 } | Select-Object -First 1
-    $stable   = $versiones | Where-Object { ($_ -split '\.')[1] % 2 -eq 0 } | Select-Object -First 1
+    if ($versiones.Count -eq 0) {
+        printError "No se encontraron versiones de Nginx en Chocolatey."
+        return
+    }
+
+    # Separar mainline (desarrollo, numero menor impar) de stable (par)
+    # Ej: 1.27.x = mainline/desarrollo, 1.26.x = stable
+    $mainline = $versiones | Where-Object {
+        $partes = $_ -split '\.'
+        $partes.Count -ge 2 -and ([int]$partes[1] % 2 -ne 0)
+    } | Select-Object -First 1
+
+    $stable = $versiones | Where-Object {
+        $partes = $_ -split '\.'
+        $partes.Count -ge 2 -and ([int]$partes[1] % 2 -eq 0)
+    } | Select-Object -First 1
+
+    # Si no hay distincion clara, usar las primeras dos
+    if (-not $mainline) { $mainline = $versiones[0] }
+    if (-not $stable)   { $stable   = if ($versiones.Count -ge 2) { $versiones[1] } else { $versiones[0] } }
 
     Write-Host ""
     Write-Host "Versiones disponibles:" -ForegroundColor Cyan
-    Write-Host "  1. $mainline  [Mainline/Desarrollo]"
-    Write-Host "  2. $stable    [Stable/LTS]"
+    Write-Host "  1. $mainline  [Mainline - Desarrollo]"
+    Write-Host "  2. $stable    [Stable - LTS]"
     Write-Host ""
 
     do {
@@ -396,62 +411,122 @@ function instalarNginx {
 
     $versionElegida = if ($selVer -eq "1") { $mainline } else { $stable }
 
-    # ── Descargar ──
-    $zipName = "nginx-$versionElegida.zip"
-    $url     = "https://nginx.org/download/$zipName"
-    $destZip = "$env:TEMP\$zipName"
-    $destDir = "C:\nginx"
-
-    printInfo "Descargando Nginx $versionElegida..."
-    try {
-        Invoke-WebRequest -Uri $url -OutFile $destZip -UseBasicParsing
-    } catch {
-        printError "Error descargando Nginx."
+    # ── Instalar Nginx ──
+    printInfo "Instalando Nginx $versionElegida..."
+    choco install nginx --version="$versionElegida" --yes --no-progress --force
+    
+    if ($LASTEXITCODE -ne 0) {
+        printError "Fallo la instalacion de Nginx."
         return
     }
 
-    if (Test-Path $destDir) { Remove-Item $destDir -Recurse -Force }
-    Expand-Archive -Path $destZip -DestinationPath "C:\" -Force
-    # Renombrar carpeta nginx-X.XX.X a nginx
-    Rename-Item "C:\nginx-$versionElegida" "C:\nginx" -ErrorAction SilentlyContinue
-    Remove-Item $destZip -Force
+    # Recargar PATH
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" +
+                [System.Environment]::GetEnvironmentVariable("Path","User")
 
-    if (-not (Test-Path "C:\nginx\nginx.exe")) {
-        printError "Extraccion fallida."
+    # ── Instalar NSSM para registrar Nginx como servicio real de Windows ──
+    # La tarea programada no funciona porque nginx.exe necesita seguir corriendo
+    printInfo "Instalando NSSM (gestor de servicios)..."
+    choco install nssm --yes --no-progress | Out-Null
+
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" +
+                [System.Environment]::GetEnvironmentVariable("Path","User")
+
+    # ── Encontrar nginx.exe ──
+    $posiblesRutas = @(
+        "C:\tools\nginx",
+        "C:\nginx",
+        "C:\ProgramData\chocolatey\lib\nginx\tools\nginx-$versionElegida"
+    )
+    $nginxPath = $posiblesRutas | Where-Object { Test-Path "$_\nginx.exe" } | Select-Object -First 1
+
+    if (-not $nginxPath) {
+        printInfo "Buscando nginx.exe en disco..."
+        $encontrado = Get-ChildItem -Path "C:\" -Filter "nginx.exe" -Recurse -ErrorAction SilentlyContinue |
+                      Select-Object -First 1
+        if ($encontrado) { $nginxPath = $encontrado.DirectoryName }
+    }
+
+    if (-not $nginxPath) {
+        printError "No se encontro nginx.exe. Revisa la instalacion."
         return
     }
 
-    printOK "Nginx $versionElegida extraido en C:\nginx"
+    printInfo "Nginx encontrado en: $nginxPath"
 
     # ── Configurar puerto en nginx.conf ──
-    $nginxConf = "C:\nginx\conf\nginx.conf"
-    printInfo "Configurando puerto $puerto..."
+    $nginxConf = "$nginxPath\conf\nginx.conf"
+    printInfo "Configurando puerto $puerto en nginx.conf..."
 
-    (Get-Content $nginxConf) -replace 'listen\s+80', "listen $puerto" | Set-Content $nginxConf
+    # Reemplazar el puerto en el bloque server { listen X; }
+    (Get-Content $nginxConf) -replace 'listen\s+\d+\s*;', "listen $puerto;" |
+        Set-Content $nginxConf
 
-    printOK "Puerto $puerto configurado en nginx.conf"
+    printOK "Puerto $puerto configurado."
 
-    # ── Index HTML ──
-    crearHTML -rutaWeb "C:\nginx\html" -servicio "Nginx" -version $versionElegida -puerto $puerto
+    # ── Seguridad: ocultar version en nginx.conf ──
+    aplicarSeguridadNginx -nginxPath $nginxPath
 
-    # ── Registrar como servicio con NSSM o tarea programada ──
-    printInfo "Registrando Nginx como servicio..."
-    $accion   = New-ScheduledTaskAction -Execute "C:\nginx\nginx.exe"
-    $trigger  = New-ScheduledTaskTrigger -AtStartup
-    $settings = New-ScheduledTaskSettingsSet -RestartOnIdle
-    Register-ScheduledTask -TaskName "Nginx-$puerto" -Action $accion -Trigger $trigger -RunLevel Highest -Force | Out-Null
-    Start-ScheduledTask -TaskName "Nginx-$puerto"
+    # ── Index HTML personalizado ──
+    crearHTML `
+        -rutaWeb "$nginxPath\html" `
+        -servicio "Nginx" `
+        -version $versionElegida `
+        -puerto $puerto
+
+    # ── Registrar como servicio Windows con NSSM ──
+    $serviceName = "nginx-$puerto"
+    printInfo "Registrando Nginx como servicio '$serviceName' con NSSM..."
+
+    # Eliminar servicio anterior si existe
+    nssm stop $serviceName 2>$null | Out-Null
+    nssm remove $serviceName confirm 2>$null | Out-Null
+
+    # Crear nuevo servicio
+    nssm install $serviceName "$nginxPath\nginx.exe"
+    nssm set $serviceName AppDirectory $nginxPath
+    nssm set $serviceName DisplayName "Nginx HTTP Server (puerto $puerto)"
+    nssm set $serviceName Description "Servidor Nginx instalado via script"
+    nssm set $serviceName Start SERVICE_AUTO_START
+
+    # Iniciar servicio
+    Start-Service $serviceName -ErrorAction SilentlyContinue
 
     # ── Firewall ──
     configurarFirewall -puertNuevo $puerto -puertoViejo 80 -nombreServicio "Nginx"
 
-    Start-Sleep -Seconds 2
-    $test = Test-NetConnection -ComputerName localhost -Port $puerto -WarningAction SilentlyContinue
-    if ($test.TcpTestSucceeded) {
+    # ── Verificar ──
+    Start-Sleep -Seconds 3
+    $svc = Get-Service $serviceName -ErrorAction SilentlyContinue
+    if ($svc -and $svc.Status -eq "Running") {
         printOK "Nginx corriendo en http://localhost:$puerto"
     } else {
-        printWarn "Nginx puede tardar unos segundos. Prueba: curl -I http://localhost:$puerto"
+        printWarn "El servicio no inicio. Revisa el log: $nginxPath\logs\error.log"
+        printWarn "O inicia manualmente: nssm start $serviceName"
     }
+}
+
+# ── Seguridad Nginx: ocultar version del servidor ──
+function aplicarSeguridadNginx {
+    param([string]$nginxPath)
+
+    printInfo "Aplicando seguridad en Nginx..."
+    $nginxConf = "$nginxPath\conf\nginx.conf"
+
+    $contenido = Get-Content $nginxConf -Raw
+
+    # server_tokens off: oculta version en headers y paginas de error
+    if ($contenido -notmatch 'server_tokens') {
+        $contenido = $contenido -replace 'http \{', "http {`n    server_tokens off;"
+    }
+
+    # Headers de seguridad dentro del bloque server
+    if ($contenido -notmatch 'X-Frame-Options') {
+        $contenido = $contenido -replace 'server \{', "server {`n        add_header X-Frame-Options SAMEORIGIN;`n        add_header X-Content-Type-Options nosniff;"
+    }
+
+    $contenido | Set-Content $nginxConf
+    printOK "Seguridad Nginx configurada (server_tokens off, security headers)."
 }
 
 # ----------------
