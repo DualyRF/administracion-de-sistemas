@@ -344,6 +344,46 @@ function instalarIIS {
 }
 
 # ----------------
+# USUARIO DEDICADO PARA IIS
+# ----------------
+function Configurar-UsuarioIIS {
+    Print-Info "Configurando usuario dedicado para IIS..."
+
+    $usuario = "iis_webuser"
+    $rutaWeb = "C:\inetpub\wwwroot"
+
+    # Crear usuario local con contraseña aleatoria (sin acceso interactivo)
+    $pass = [System.Web.Security.Membership]::GeneratePassword(16, 4)
+    # Si no tienes System.Web, usa esto:
+    $pass = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 16 | ForEach-Object {[char]$_})
+
+    try {
+        # Crear usuario si no existe
+        $existente = Get-LocalUser -Name $usuario -ErrorAction SilentlyContinue
+        if (-not $existente) {
+            $securePass = ConvertTo-SecureString $pass -AsPlainText -Force
+            New-LocalUser -Name $usuario -Password $securePass `
+                -Description "Usuario dedicado IIS - sin login interactivo" `
+                -PasswordNeverExpires $true `
+                -UserMayNotChangePassword $true | Out-Null
+            Print-OK "Usuario '$usuario' creado."
+        }
+
+        # Dar permisos SOLO sobre wwwroot (lectura)
+        $acl = Get-Acl $rutaWeb
+        $regla = New-Object System.Security.AccessControl.FileSystemAccessRule(
+            $usuario, "ReadAndExecute", "ContainerInherit,ObjectInherit", "None", "Allow"
+        )
+        $acl.SetAccessRule($regla)
+        Set-Acl $rutaWeb $acl
+        Print-OK "Permisos configurados: '$usuario' solo puede leer $rutaWeb"
+
+    } catch {
+        Print-Warn "No se pudo crear usuario dedicado: $_"
+    }
+}
+
+# ----------------
 # Instalar simple-http-server con pip/cargo
 # ----------------
 function instalarSSH {
