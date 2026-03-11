@@ -60,25 +60,29 @@ crearBase() {
         fi
     done
 
-    sudo chown root:root "$FTP_ROOT"
-    sudo chmod 755 "$FTP_ROOT"
+    # Raíz FTP: dueño root, no escribible por nadie más
+    chown root:root "$FTP_ROOT"
+    chmod 755 "$FTP_ROOT"
 
-    sudo chown root:users "$FTP_ROOT/general"
-    sudo chmod 775 "$FTP_ROOT/general"
+    # /srv/ftp/general: grupo "users" puede escribir (todos los autenticados)
+    chown root:users "$FTP_ROOT/general"
+    chmod 1775 "$FTP_ROOT/general"
 
-    sudo chown root:"$GRUPO_REPROBADOS" "$FTP_ROOT/$GRUPO_REPROBADOS"
-    sudo chmod 775 "$FTP_ROOT/$GRUPO_REPROBADOS"
+    # Carpetas de grupos: solo miembros del grupo pueden entrar y escribir
+    chown root:"$GRUPO_REPROBADOS" "$FTP_ROOT/$GRUPO_REPROBADOS"
+    chmod 775 "$FTP_ROOT/$GRUPO_REPROBADOS"
+    chown root:"$GRUPO_RECURSADORES" "$FTP_ROOT/$GRUPO_RECURSADORES"
+    chmod 775 "$FTP_ROOT/$GRUPO_RECURSADORES"
 
-    sudo chown root:"$GRUPO_RECURSADORES" "$FTP_ROOT/$GRUPO_RECURSADORES"
-    sudo chmod 775 "$FTP_ROOT/$GRUPO_RECURSADORES"
+    # Carpetas personales
+    chown root:root "$FTP_ROOT/personal"
+    chmod 755 "$FTP_ROOT/personal"
 
-    sudo chown root:root "$FTP_ROOT/personal"
-    sudo chmod 755 "$FTP_ROOT/personal"
+    # Contenedor de jaulas
+    chown root:root "$FTP_ROOT/usuarios"
+    chmod 755 "$FTP_ROOT/usuarios"
 
-    sudo chown root:root "$JAULAS_DIR"
-    sudo chmod 755 "$JAULAS_DIR"
-
-    print_success "Estructura base configurada"
+    print_completado "Estructura base configurada"
 }
 
 crearGrupos() {

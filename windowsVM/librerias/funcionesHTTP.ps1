@@ -138,120 +138,108 @@ function instalarApache {
     Write-Host "--- Instalacion de Apache HTTP Server ---" -ForegroundColor Magenta
     Write-Host ""
 
-    # Verificar que Chocolatey este instalado
-    if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
-        printInfo "Instalando Chocolatey (gestor de paquetes)..."
-        Set-ExecutionPolicy Bypass -Scope Process -Force
-        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-        Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
-        # Recargar PATH para que choco este disponible
-        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-    }
+    # ── Consultar versiones desde Apache Lounge (fuente oficial para Windows) ──
+    printInfo "Consultando versiones disponibles de Apache desde apachelounge.com..."
 
-    # ── Consultar versiones disponibles dinamicamente ──
-    printInfo "Consultando versiones disponibles de Apache..."
-
-    # choco list apache-httpd --all-versions --limit-output
-    # El formato de salida es: paquete|version
-    $verOut = choco list apache-httpd --all-versions --limit-output 2>$null
-    
-    if (-not $verOut) {
-        printWarn "No se encontro 'apache-httpd' en Chocolatey. Buscando alternativas..."
-        $verOut = choco list apache --all-versions --limit-output 2>$null
-    }
-
-    # Parsear versiones (formato: "apache-httpd|2.4.62")
-    $versiones = @()
-    foreach ($linea in $verOut) {
-        if ($linea -match '\|') {
-            $partes = $linea -split '\|'
-            if ($partes.Length -ge 2) {
-                $versiones += $partes[1].Trim()
-            }
-        }
+    try {
+        $html = Invoke-WebRequest -Uri "https://www.apachelounge.com/download/" -UseBasicParsing -TimeoutSec 10
+        
+        # Buscar links de descarga con patron: httpd-2.X.XX-winXX-VSxx.zip
+        $matches = [regex]::Matches($html.Content, 'httpd-(\d+\.\d+\.\d+)-win64')
+        
+        # Extraer versiones unicas y ordenarlas de mayor a menor
+        $versiones = $matches | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique -Descending
+        
+    } catch {
+        printWarn "No se pudo conectar a apachelounge.com. Usando versiones conocidas como respaldo..."
+        # Fallback con versiones conocidas recientes
+        $versiones = @("2.4.63", "2.4.62", "2.4.61")
     }
 
     if ($versiones.Count -eq 0) {
-        printError "No se pudieron obtener versiones. Verifica conexion a internet."
+        printError "No se encontraron versiones disponibles."
         return
     }
 
-    # Mostrar versiones: la primera es la mas reciente (desarrollo/latest)
-    # La segunda o la ultima LTS seria la estable
+    # Mostrar versiones
+    Write-Host ""
     Write-Host "Versiones disponibles:" -ForegroundColor Cyan
-    Write-Host "  1. $($versiones[0])  [Mas reciente]"
-    if ($versiones.Count -ge 2) {
-        Write-Host "  2. $($versiones[1])  [Anterior/Estable]"
-    }
-    if ($versiones.Count -ge 3) {
-        Write-Host "  3. $($versiones[-1]) [Mas antigua disponible]"
+    for ($i = 0; $i -lt [Math]::Min($versiones.Count, 3); $i++) {
+        $etiqueta = if ($i -eq 0) { "[Latest - Desarrollo]" } elseif ($i -eq 1) { "[Estable anterior]" } else { "[LTS]" }
+        Write-Host "  $($i+1). $($versiones[$i])  $etiqueta"
     }
     Write-Host ""
 
-    $selVer = Read-Host "Selecciona version (1/2/3)"
-    $versionElegida = switch ($selVer) {
-        "1" { $versiones[0] }
-        "2" { if ($versiones.Count -ge 2) { $versiones[1] } else { $versiones[0] } }
-        "3" { if ($versiones.Count -ge 3) { $versiones[-1] } else { $versiones[0] } }
-        default { $versiones[0] }
-    }
+    do {
+        $selVer = Read-Host "Selecciona version (1-3)"
+    } while ($selVer -notmatch '^[123]$')
 
-    printInfo "Instalando Apache $versionElegida..."
-    choco install apache-httpd --version=$versionElegida --yes --no-progress 2>&1 | Tee-Object -Variable chocoOutput | Out-Null
+    $idx = [int]$selVer - 1
+    if ($idx -ge $versiones.Count) { $idx = 0 }
+    $versionElegida = $versiones[$idx]
 
-    if ($LASTEXITCODE -ne 0) {
-        printError "Error en la instalacion. Salida: $chocoOutput"
+    # ── Descargar e instalar ──
+    $zipName = "httpd-$versionElegida-win64-VS17.zip"
+    $url     = "https://www.apachelounge.com/download/VS17/binaries/$zipName"
+    $destZip = "$env:TEMP\$zipName"
+    $destDir = "C:\Apache24"
+
+    printInfo "Descargando Apache $versionElegida..."
+    try {
+        Invoke-WebRequest -Uri $url -OutFile $destZip -UseBasicParsing
+    } catch {
+        printError "Error descargando: $url"
+        printWarn "Verifica tu conexion o descarga manualmente desde apachelounge.com"
         return
     }
 
-    printOK "Apache $versionElegida instalado."
-
-    # ── Configurar puerto en httpd.conf ──
-    # Apache en Windows instala en C:\tools\apache24\ o C:\Apache24\
-    $apachePath = @("C:\tools\Apache24", "C:\Apache24", "C:\Program Files\Apache Software Foundation\Apache2.4") |
-                  Where-Object { Test-Path $_ } | Select-Object -First 1
-
-    if (-not $apachePath) {
-        printWarn "No se encontro directorio de Apache. Ajusta la ruta manualmente."
-    } else {
-        $httpdConf = "$apachePath\conf\httpd.conf"
-        printInfo "Editando $httpdConf para usar puerto $puerto (elegido)..."
-
-        # Cambiar "Listen 80" por el puerto elegido
-        (Get-Content $httpdConf) -replace 'Listen 80', "Listen $puerto" |
-            Set-Content $httpdConf
-
-        # Cambiar ServerName tambien (evita warnings)
-        (Get-Content $httpdConf) -replace '#ServerName www.example.com:80', "ServerName localhost:$puerto" |
-            Set-Content $httpdConf
-
-        printOK "Puerto $puerto configurado en httpd.conf"
-
-        # ----------------
-        # Llamando a las funciones de seguridad y configuracion general
-        # ----------------
-
-        # ── Seguridad: ocultar version en Apache ──
-        aplicarSeguridadApache -apachePath $apachePath
-
-        # ── Crear index.html ──
-        CrearHTML `
-            -rutaWeb "$apachePath\htdocs" `
-            -servicio "Apache HTTP Server" `
-            -version $versionElegida `
-            -puerto $puerto
-
-        # ── Firewall ──
-        configurarFirewall -puertNuevo $puerto -puertoViejo 80 -nombreServicio "Apache"
-
-        # ── Iniciar Apache como servicio ──
-        $apacheService = "$apachePath\bin\httpd.exe"
-        if (Test-Path $apacheService) {
-            & $apacheService -k install -n "Apache24" | Out-Null
-            Start-Service Apache24 -ErrorAction SilentlyContinue
-            printOK "Apache activo en http://localhost:$puerto"
-        }
+    printInfo "Extrayendo en $destDir..."
+    if (Test-Path $destDir) {
+        Remove-Item $destDir -Recurse -Force
     }
+    Expand-Archive -Path $destZip -DestinationPath "C:\" -Force
+    Remove-Item $destZip -Force
+
+    # Verificar que se extrajo correctamente
+    if (-not (Test-Path "C:\Apache24\bin\httpd.exe")) {
+        printError "La extraccion fallo. No se encontro httpd.exe en C:\Apache24\bin\"
+        return
+    }
+
+    printOK "Apache $versionElegida extraido en C:\Apache24"
+
+    # ── Configurar puerto ──
+    $httpdConf = "C:\Apache24\conf\httpd.conf"
+    printInfo "Configurando puerto $puerto en httpd.conf..."
+
+    (Get-Content $httpdConf) -replace 'Listen 80', "Listen $puerto" | Set-Content $httpdConf
+    (Get-Content $httpdConf) -replace '#ServerName www.example.com:80', "ServerName localhost:$puerto" | Set-Content $httpdConf
+
+    # Definir ServerRoot correctamente
+    (Get-Content $httpdConf) -replace 'Define SRVROOT.*', 'Define SRVROOT "C:/Apache24"' | Set-Content $httpdConf
+
+    printOK "Puerto $puerto configurado."
+
+    # ── Seguridad ──
+    aplicarSeguridadApache -apachePath "C:\Apache24"
+
+    # ── Index HTML ──
+    crearHTML -rutaWeb "C:\Apache24\htdocs" -servicio "Apache HTTP Server" -version $versionElegida -puerto $puerto
+
+    # ── Instalar como servicio de Windows ──
+    printInfo "Registrando Apache como servicio de Windows..."
+    & "C:\Apache24\bin\httpd.exe" -k install -n "Apache24" 2>&1 | Out-Null
+    Start-Service Apache24 -ErrorAction SilentlyContinue
+
+    $svc = Get-Service Apache24 -ErrorAction SilentlyContinue
+    if ($svc -and $svc.Status -eq "Running") {
+        printOK "Apache corriendo en http://localhost:$puerto"
+    } else {
+        printWarn "Servicio no inicio. Intenta manualmente: C:\Apache24\bin\httpd.exe -k start"
+    }
+
+    # ── Firewall ──
+    configurarFirewall -puertNuevo $puerto -puertoViejo 80 -nombreServicio "Apache"
 }
 
 # ----------------
@@ -346,7 +334,7 @@ function instalarIIS {
 # ----------------
 # USUARIO DEDICADO PARA IIS
 # ----------------
-function Configurar-UsuarioIIS {
+function configurarUsuarioIIS {
     printInfo "Configurando usuario dedicado para IIS..."
 
     $usuario = "iis_webuser"
@@ -386,93 +374,100 @@ function Configurar-UsuarioIIS {
 # ----------------
 # Instalar simple-http-server con pip/cargo
 # ----------------
-function instalarSSH {
+function instalarNginx {
     param([int]$puerto)
 
     Clear-Host
-    Write-Host "--- Instalacion de simple-http-server ---" -ForegroundColor Magenta
+    Write-Host "--- Instalacion de Nginx para Windows ---" -ForegroundColor Magenta
     Write-Host ""
 
-    # simple-http-server es un binario en Rust (cargo)
-    # Alternativa mas simple: usar Python http.server o http-server (npm)
-    # Aqui usamos http-server de Node.js/npm por ser mas comun
+    # Consultar versiones desde nginx.org
+    printInfo "Consultando versiones desde nginx.org..."
 
-    # Verificar Node.js
-    if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-        printInfo "Node.js no encontrado. Instalando via Chocolatey..."
-        if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
-            # Instalar Chocolatey primero
-            Set-ExecutionPolicy Bypass -Scope Process -Force
-            Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
-            $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-        }
-        choco install nodejs --yes --no-progress | Out-Null
-        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+    try {
+        $html = Invoke-WebRequest -Uri "https://nginx.org/en/download.html" -UseBasicParsing -TimeoutSec 10
+        
+        # Buscar versiones: patron nginx-X.XX.X
+        $matchesStable  = [regex]::Matches($html.Content, 'nginx-(\d+\.\d+\.\d+)\.zip')
+        $versiones = $matchesStable | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique -Descending
+
+    } catch {
+        printWarn "No se pudo conectar. Usando versiones conocidas..."
+        $versiones = @("1.27.4", "1.26.3", "1.24.0")
     }
 
-    # Consultar versiones disponibles de http-server en npm
-    printInfo "Consultando versiones de http-server en npm..."
-    $verJson = npm view http-server versions --json 2>$null | ConvertFrom-Json
+    # Separar mainline (desarrollo, impar) de stable (par)
+    $mainline = $versiones | Where-Object { ($_ -split '\.')[1] % 2 -ne 0 } | Select-Object -First 1
+    $stable   = $versiones | Where-Object { ($_ -split '\.')[1] % 2 -eq 0 } | Select-Object -First 1
 
-    if (-not $verJson) {
-        printError "No se pudieron obtener versiones de npm."
+    Write-Host ""
+    Write-Host "Versiones disponibles:" -ForegroundColor Cyan
+    Write-Host "  1. $mainline  [Mainline/Desarrollo]"
+    Write-Host "  2. $stable    [Stable/LTS]"
+    Write-Host ""
+
+    do {
+        $selVer = Read-Host "Selecciona version (1/2)"
+    } while ($selVer -notmatch '^[12]$')
+
+    $versionElegida = if ($selVer -eq "1") { $mainline } else { $stable }
+
+    # ── Descargar ──
+    $zipName = "nginx-$versionElegida.zip"
+    $url     = "https://nginx.org/download/$zipName"
+    $destZip = "$env:TEMP\$zipName"
+    $destDir = "C:\nginx"
+
+    printInfo "Descargando Nginx $versionElegida..."
+    try {
+        Invoke-WebRequest -Uri $url -OutFile $destZip -UseBasicParsing
+    } catch {
+        printError "Error descargando Nginx."
         return
     }
 
-    # Mostrar ultimas versiones
-    $verArray = $verJson | Select-Object -Last 5
-    Write-Host "Versiones disponibles (ultimas 5):" -ForegroundColor Cyan
-    for ($i = 0; $i -lt $verArray.Count; $i++) {
-        $etiqueta = if ($i -eq ($verArray.Count - 1)) { "[Latest]" } elseif ($i -eq 0) { "[LTS/Estable]" } else { "" }
-        Write-Host "  $($i+1). $($verArray[$i]) $etiqueta"
-    }
-    Write-Host ""
+    if (Test-Path $destDir) { Remove-Item $destDir -Recurse -Force }
+    Expand-Archive -Path $destZip -DestinationPath "C:\" -Force
+    # Renombrar carpeta nginx-X.XX.X a nginx
+    Rename-Item "C:\nginx-$versionElegida" "C:\nginx" -ErrorAction SilentlyContinue
+    Remove-Item $destZip -Force
 
-    $selVer = Read-Host "Selecciona version (1-$($verArray.Count))"
-    $idx = [int]$selVer - 1
-    if ($idx -lt 0 -or $idx -ge $verArray.Count) { $idx = $verArray.Count - 1 }
-    $versionElegida = $verArray[$idx]
-
-    printInfo "Instalando http-server@$versionElegida globalmente..."
-    npm install -g http-server@$versionElegida --silent 2>&1 | Out-Null
-
-    if ($LASTEXITCODE -ne 0) {
-        printError "Error instalando http-server."
+    if (-not (Test-Path "C:\nginx\nginx.exe")) {
+        printError "Extraccion fallida."
         return
     }
 
-    printOK "http-server $versionElegida instalado."
+    printOK "Nginx $versionElegida extraido en C:\nginx"
 
-    # Directorio de contenido web
-    $webRoot = "C:\inetpub\http-server"
-    if (-not (Test-Path $webRoot)) { New-Item -ItemType Directory -Path $webRoot -Force | Out-Null }
+    # ── Configurar puerto en nginx.conf ──
+    $nginxConf = "C:\nginx\conf\nginx.conf"
+    printInfo "Configurando puerto $puerto..."
 
-    # Crear index.html
-    CrearHTML -rutaWeb $webRoot -servicio "simple-http-server" -version $versionElegida -puerto $puerto
+    (Get-Content $nginxConf) -replace 'listen\s+80', "listen $puerto" | Set-Content $nginxConf
 
-    # Firewall
-    configurarFirewall -puertNuevo $puerto -puertoViejo 8080 -nombreServicio "SHS"
+    printOK "Puerto $puerto configurado en nginx.conf"
 
-    # Registrar como tarea programada (para que arranque como servicio)
-    printInfo "Registrando http-server como servicio (Tarea Programada)..."
-    $accion = New-ScheduledTaskAction `
-        -Execute "cmd.exe" `
-        -Argument "/c http-server `"$webRoot`" -p $puerto --silent"
+    # ── Index HTML ──
+    crearHTML -rutaWeb "C:\nginx\html" -servicio "Nginx" -version $versionElegida -puerto $puerto
 
-    $trigger = New-ScheduledTaskTrigger -AtStartup
+    # ── Registrar como servicio con NSSM o tarea programada ──
+    printInfo "Registrando Nginx como servicio..."
+    $accion   = New-ScheduledTaskAction -Execute "C:\nginx\nginx.exe"
+    $trigger  = New-ScheduledTaskTrigger -AtStartup
     $settings = New-ScheduledTaskSettingsSet -RestartOnIdle
+    Register-ScheduledTask -TaskName "Nginx-$puerto" -Action $accion -Trigger $trigger -RunLevel Highest -Force | Out-Null
+    Start-ScheduledTask -TaskName "Nginx-$puerto"
 
-    Register-ScheduledTask `
-        -TaskName "SimpleHTTPServer-$puerto" `
-        -Action $accion `
-        -Trigger $trigger `
-        -RunLevel Highest `
-        -Force | Out-Null
+    # ── Firewall ──
+    configurarFirewall -puertNuevo $puerto -puertoViejo 80 -nombreServicio "Nginx"
 
-    # Ejecutar ahora
-    Start-ScheduledTask -TaskName "SimpleHTTPServer-$puerto"
-
-    printOK "simple-http-server activo en http://localhost:$puerto"
+    Start-Sleep -Seconds 2
+    $test = Test-NetConnection -ComputerName localhost -Port $puerto -WarningAction SilentlyContinue
+    if ($test.TcpTestSucceeded) {
+        printOK "Nginx corriendo en http://localhost:$puerto"
+    } else {
+        printWarn "Nginx puede tardar unos segundos. Prueba: curl -I http://localhost:$puerto"
+    }
 }
 
 # ----------------
@@ -655,7 +650,7 @@ function InstalarHTTP {
             instalarApache -puerto $puerto 
         }
         "3" { 
-            instalarSSH -puerto $puerto 
+            instalarNginx -puerto $puerto 
         }
     }
 }
