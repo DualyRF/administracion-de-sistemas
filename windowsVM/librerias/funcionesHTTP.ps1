@@ -138,17 +138,12 @@ function instalarApache {
     Write-Host "--- Instalacion de Apache HTTP Server ---" -ForegroundColor Magenta
     Write-Host ""
 
-    # Verificar Chocolatey
-    if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
-        printError "Chocolatey no esta instalado."
-        return
-    }
-
-    # ── Consultar versiones disponibles (cache local + online si hay internet) ──
+    # ── Consultar versiones usando 'search' (funciona en Chocolatey v2.x) ──
     printInfo "Consultando versiones disponibles de apache-httpd..."
 
-    # --exact busca solo ese paquete, --limit-output da formato limpio
-    $rawVersiones = choco list apache-httpd --all-versions --exact --limit-output 2>$null
+    # En Chocolatey v2, 'list' solo muestra paquetes locales
+    # 'search' consulta el repositorio remoto
+    $rawVersiones = choco search apache-httpd --exact --all-versions --limit-output 2>$null
 
     $versiones = @()
     foreach ($linea in $rawVersiones) {
@@ -160,96 +155,59 @@ function instalarApache {
         }
     }
 
-    # Si solo hay una version (sin internet), igual la mostramos
-    # El script cumple el requisito de "consultar dinamicamente"
     if ($versiones.Count -eq 0) {
-        printError "No se encontro apache-httpd en Chocolatey. Sin internet y sin cache."
+        printError "No se encontraron versiones. Verifica internet y ejecuta: choco search apache-httpd --exact"
         return
     }
 
+    # Mostrar versiones (maximo 3)
     Write-Host ""
-    Write-Host "Versiones encontradas en repositorio:" -ForegroundColor Cyan
-
-    # Mostrar todas las disponibles (aunque sea solo 1)
-    for ($i = 0; $i -lt $versiones.Count; $i++) {
-        $etiqueta = if ($i -eq 0) { "[Mas reciente disponible]" } else { "[Version anterior]" }
+    Write-Host "Versiones disponibles en repositorio:" -ForegroundColor Cyan
+    $limite = [Math]::Min($versiones.Count, 3)
+    for ($i = 0; $i -lt $limite; $i++) {
+        $etiqueta = switch ($i) {
+            0 { "[Latest - Desarrollo]" }
+            1 { "[Estable anterior]"    }
+            2 { "[LTS]"                 }
+        }
         Write-Host "  $($i+1). $($versiones[$i])  $etiqueta"
     }
-
-    # Si solo hay 1 version, igual preguntar (para cumplir con el flujo)
     Write-Host ""
-    if ($versiones.Count -eq 1) {
-        printWarn "Solo hay una version disponible sin conexion a internet: $($versiones[0])"
-        $confirmar = Read-Host "Instalar $($versiones[0])? (s/n)"
-        if ($confirmar -ne 's') { return }
-        $versionElegida = $versiones[0]
-    } else {
-        do {
-            $selVer = Read-Host "Selecciona version (1-$($versiones.Count))"
-        } while ($selVer -notmatch "^[1-$($versiones.Count)]$")
-        $versionElegida = $versiones[[int]$selVer - 1]
-    }
 
-    # ── Instalacion silenciosa ──
-    printInfo "Instalando Apache $versionElegida (modo silencioso)..."
+    do {
+        $selVer = Read-Host "Selecciona version (1-$limite)"
+    } while ($selVer -notmatch "^[1-$limite]$")
+
+    $versionElegida = $versiones[[int]$selVer - 1]
+
+    # ── Instalacion silenciosa pasando el puerto directamente como parametro ──
+    # Esto evita tener que editar httpd.conf manualmente
+    printInfo "Instalando Apache $versionElegida en puerto $puerto..."
 
     choco install apache-httpd `
         --version="$versionElegida" `
+        --params="`"/port:$puerto /installLocation:C:\Apache24`"" `
         --yes `
         --no-progress `
-        2>&1 | Out-Null
+        --force
 
     if ($LASTEXITCODE -ne 0) {
         printError "Fallo la instalacion. Codigo: $LASTEXITCODE"
         return
     }
 
-    printOK "Apache $versionElegida instalado."
+    # Recargar PATH
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" +
+                [System.Environment]::GetEnvironmentVariable("Path","User")
 
-    # Recargar PATH (Chocolatey modifica variables de entorno)
-    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-
-    # ── Encontrar directorio de instalacion ──
-    $posiblesRutas = @(
-        "$env:APPDATA\Apache24",
-        "$env:LOCALAPPDATA\Apache24",
-        "C:\tools\Apache24",
-        "C:\Apache24",
-        "C:\ProgramData\chocolatey\lib\apache-httpd\tools\Apache24"
-    )
-    $apachePath = $posiblesRutas | Where-Object { Test-Path "$_\conf\httpd.conf" } | Select-Object -First 1
-
-    # Si no lo encontro, buscarlo automaticamente
-    if (-not $apachePath) {
-        printInfo "Buscando directorio de Apache en disco..."
-        $encontrado = Get-ChildItem -Path "C:\" -Filter "httpd.conf" -Recurse -ErrorAction SilentlyContinue |
-                      Select-Object -First 1
-        if ($encontrado) {
-            $apachePath = $encontrado.DirectoryName -replace '\\conf$', ''
-            printInfo "Encontrado en: $apachePath"
-        }
-    }
-
-    if (-not $apachePath) {
-        printError "No se encontro el directorio de Apache. Revisa la instalacion manualmente."
-        return
-    }
-
-    # ── Cambiar puerto en httpd.conf ──
-    $httpdConf = "$apachePath\conf\httpd.conf"
-    printInfo "Configurando puerto $puerto en $httpdConf..."
-
-    (Get-Content $httpdConf) -replace 'Listen \d+', "Listen $puerto" | Set-Content $httpdConf
-    (Get-Content $httpdConf) -replace 'ServerName .*:\d+', "ServerName localhost:$puerto" | Set-Content $httpdConf
-
-    printOK "Puerto $puerto configurado."
+    printOK "Apache $versionElegida instalado en C:\Apache24"
 
     # ── Seguridad ──
-    aplicarSeguridadApache -apachePath $apachePath
+    aplicarSeguridadApache -apachePath "C:\Apache24"
 
     # ── Index HTML ──
     crearHTML `
-        -rutaWeb "$apachePath\htdocs" `
+        -rutaWeb "C:\Apache24\htdocs" `
         -servicio "Apache HTTP Server" `
         -version $versionElegida `
         -puerto $puerto
@@ -257,20 +215,14 @@ function instalarApache {
     # ── Firewall ──
     configurarFirewall -puertNuevo $puerto -puertoViejo 80 -nombreServicio "Apache"
 
-    # ── Iniciar servicio ──
-    $apacheExe = "$apachePath\bin\httpd.exe"
-    if (Test-Path $apacheExe) {
-        printInfo "Registrando Apache como servicio de Windows..."
-        & $apacheExe -k install -n "Apache24" 2>&1 | Out-Null
-        Start-Service "Apache24" -ErrorAction SilentlyContinue
-    }
-
-    Start-Sleep -Seconds 2
+    # ── Verificar servicio ──
+    Start-Sleep -Seconds 3
     $svc = Get-Service "Apache*" -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($svc -and $svc.Status -eq "Running") {
         printOK "Apache corriendo en http://localhost:$puerto"
     } else {
-        printWarn "El servicio no inicio. Ejecuta manualmente: & '$apacheExe' -k start"
+        printWarn "Servicio no inicio automaticamente."
+        printWarn "Intenta manualmente: net start Apache2.4"
     }
 }
 
