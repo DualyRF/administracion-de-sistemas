@@ -1,5 +1,5 @@
 # ============================================================
-# Funciones para gestión de los servidores HTTP
+# Funciones para gestion de los servidores HTTP
 # ============================================================
 
 # ----------------
@@ -39,15 +39,15 @@ function pedirPuerto {
         if ([string]::IsNullOrWhiteSpace($input)) {
             $puerto = $default
         } else {
-            # Validar que sea número
+            # Validar que sea numero
             if ($input -notmatch '^\d+$') {
-                printWarn "Ingresa solo números."
+                printWarn "Ingresa solo numeros."
                 continue
             }
             $puerto = [int]$input
         }
 
-        # Rango válido (evitar puertos del sistema < 1024, excepto 80)
+        # Rango valido (evitar puertos del sistema < 1024, excepto 80)
         if ($puerto -ne 80 -and ($puerto -lt 1024 -or $puerto -gt 65535)) {
             printWarn "Puerto fuera de rango. Usa 80 o entre 1024-65535."
             continue
@@ -62,7 +62,7 @@ function pedirPuerto {
 }
 
 # ----------------
-# Retorna $true si está libre, $false si ocupado
+# Retorna $true si esta libre, $false si ocupado
 # ----------------
 function validarPuerto {
     param([int]$puerto)
@@ -70,14 +70,14 @@ function validarPuerto {
     # Puertos reservados del sistema que no se deben usar
     $reservados = @(22, 23, 25, 443, 3306, 3389, 5432, 8443)
     if ($reservados -contains $puerto) {
-        printWarn "El puerto $puerto está reservado para otro servicio."
+        printWarn "El puerto $puerto esta reservado para otro servicio."
         return $false
     }
 
-    # Verificar si el puerto está en uso
+    # Verificar si el puerto esta en uso
     $enUso = Get-NetTCPConnection -LocalPort $puerto -ErrorAction SilentlyContinue
     if ($enUso) {
-        # Identificar qué proceso lo usa (informativo)
+        # Identificar que proceso lo usa (informativo)
         $proceso = Get-Process -Id $enUso[0].OwningProcess -ErrorAction SilentlyContinue
         printWarn "Puerto $puerto ocupado por: $($proceso.ProcessName) (PID: $($enUso[0].OwningProcess))"
         return $false
@@ -113,7 +113,7 @@ function configurarFirewall {
 
     # Si el puerto viejo era 80 y el nuevo no es 80, cerrar el 80
     if ($puertoViejo -eq 80 -and $puertNuevo -ne 80) {
-        # Solo cerrar si ningún otro servicio lo necesita
+        # Solo cerrar si ningun otro servicio lo necesita
         $reglas = Get-NetFirewallRule -DisplayName "HTTP-*-80" -ErrorAction SilentlyContinue
         if (-not $reglas) {
             New-NetFirewallRule `
@@ -135,20 +135,20 @@ function instalarApache {
     param([int]$puerto)
 
     Clear-Host
-    Write-Host "─── Instalación de Apache HTTP Server ───" -ForegroundColor Magenta
+    Write-Host "─── Instalacion de Apache HTTP Server ───" -ForegroundColor Magenta
     Write-Host ""
 
-    # Verificar que Chocolatey esté instalado
+    # Verificar que Chocolatey este instalado
     if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
         printInfo "Instalando Chocolatey (gestor de paquetes)..."
         Set-ExecutionPolicy Bypass -Scope Process -Force
         [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
         Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
-        # Recargar PATH para que choco esté disponible
+        # Recargar PATH para que choco este disponible
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
     }
 
-    # ── Consultar versiones disponibles dinámicamente ──
+    # ── Consultar versiones disponibles dinamicamente ──
     printInfo "Consultando versiones disponibles de Apache..."
 
     # choco list apache-httpd --all-versions --limit-output
@@ -156,7 +156,7 @@ function instalarApache {
     $verOut = choco list apache-httpd --all-versions --limit-output 2>$null
     
     if (-not $verOut) {
-        printWarn "No se encontró 'apache-httpd' en Chocolatey. Buscando alternativas..."
+        printWarn "No se encontro 'apache-httpd' en Chocolatey. Buscando alternativas..."
         $verOut = choco list apache --all-versions --limit-output 2>$null
     }
 
@@ -172,12 +172,12 @@ function instalarApache {
     }
 
     if ($versiones.Count -eq 0) {
-        printError "No se pudieron obtener versiones. Verifica conexión a internet."
+        printError "No se pudieron obtener versiones. Verifica conexion a internet."
         return
     }
 
-    # Mostrar versiones: la primera es la más reciente (desarrollo/latest)
-    # La segunda o la última LTS sería la estable
+    # Mostrar versiones: la primera es la mas reciente (desarrollo/latest)
+    # La segunda o la ultima LTS seria la estable
     Write-Host "Versiones disponibles:" -ForegroundColor Cyan
     Write-Host "  1. $($versiones[0])  [Mas reciente]"
     if ($versiones.Count -ge 2) {
@@ -188,7 +188,7 @@ function instalarApache {
     }
     Write-Host ""
 
-    $selVer = Read-Host "Selecciona versión (1/2/3)"
+    $selVer = Read-Host "Selecciona version (1/2/3)"
     $versionElegida = switch ($selVer) {
         "1" { $versiones[0] }
         "2" { if ($versiones.Count -ge 2) { $versiones[1] } else { $versiones[0] } }
@@ -200,7 +200,7 @@ function instalarApache {
     choco install apache-httpd --version=$versionElegida --yes --no-progress 2>&1 | Tee-Object -Variable chocoOutput | Out-Null
 
     if ($LASTEXITCODE -ne 0) {
-        printError "Error en la instalación. Salida: $chocoOutput"
+        printError "Error en la instalacion. Salida: $chocoOutput"
         return
     }
 
@@ -212,7 +212,7 @@ function instalarApache {
                   Where-Object { Test-Path $_ } | Select-Object -First 1
 
     if (-not $apachePath) {
-        printWarn "No se encontró directorio de Apache. Ajusta la ruta manualmente."
+        printWarn "No se encontro directorio de Apache. Ajusta la ruta manualmente."
     } else {
         $httpdConf = "$apachePath\conf\httpd.conf"
         printInfo "Editando $httpdConf para usar puerto $puerto (elegido)..."
@@ -221,7 +221,7 @@ function instalarApache {
         (Get-Content $httpdConf) -replace 'Listen 80', "Listen $puerto" |
             Set-Content $httpdConf
 
-        # Cambiar ServerName también (evita warnings)
+        # Cambiar ServerName tambien (evita warnings)
         (Get-Content $httpdConf) -replace '#ServerName www.example.com:80', "ServerName localhost:$puerto" |
             Set-Content $httpdConf
 
@@ -231,7 +231,7 @@ function instalarApache {
         # Llamando a las funciones de seguridad y configuracion general
         # ----------------
 
-        # ── Seguridad: ocultar versión en Apache ──
+        # ── Seguridad: ocultar version en Apache ──
         aplicarSeguridadApache -apachePath $apachePath
 
         # ── Crear index.html ──
@@ -261,15 +261,15 @@ function instalarIIS {
     param([int]$puerto)
 
     Clear-Host
-    Write-Host "─── Instalación de IIS ───" -ForegroundColor Magenta
+    Write-Host "─── Instalacion de IIS ───" -ForegroundColor Magenta
     Write-Host ""
 
     # IIS no tiene versiones elegibles manualmente (depende del Windows)
-    # Pero podemos mostrar la versión del sistema y la de IIS disponible
+    # Pero podemos mostrar la version del sistema y la de IIS disponible
     $winVer = (Get-WmiObject Win32_OperatingSystem).Caption
     printInfo "Sistema: $winVer"
 
-    # Determinar versión IIS según Windows
+    # Determinar version IIS segun Windows
     $iisVersion = switch -Wildcard ($winVer) {
         "*Windows 11*"     { "10.0" }
         "*Windows 10*"     { "10.0" }
@@ -281,26 +281,26 @@ function instalarIIS {
     }
 
     Write-Host ""
-    Write-Host "Versión IIS disponible para tu sistema: $iisVersion" -ForegroundColor Cyan
-    Write-Host "(IIS se instala según la versión de Windows, no se puede elegir otra)"
+    Write-Host "Version IIS disponible para tu sistema: $iisVersion" -ForegroundColor Cyan
+    Write-Host "(IIS se instala segun la version de Windows, no se puede elegir otra)"
     Write-Host ""
 
     $confirmar = Read-Host "¿Instalar IIS $iisVersion en puerto $puerto? (s/n)"
     if ($confirmar -ne 's') { return }
 
-    # ── Instalación ──
+    # ── Instalacion ──
     printInfo "Instalando IIS..."
 
-    # Instalar IIS con herramientas de administración
+    # Instalar IIS con herramientas de administracion
     Install-WindowsFeature -Name Web-Server -IncludeManagementTools -ErrorAction Stop | Out-Null
 
-    # Instalar módulos de seguridad adicionales
+    # Instalar modulos de seguridad adicionales
     Install-WindowsFeature -Name Web-Security | Out-Null         # Request Filtering
     Install-WindowsFeature -Name Web-IP-Security | Out-Null      # Restricciones IP
 
     printOK "IIS instalado."
 
-    # ── Importar módulo WebAdministration (para manejar IIS con PS) ──
+    # ── Importar modulo WebAdministration (para manejar IIS con PS) ──
     Import-Module WebAdministration -ErrorAction Stop
 
     # ── Cambiar puerto ──
@@ -312,7 +312,7 @@ function instalarIIS {
 
     printOK "Puerto configurado: $puerto"
 
-    # ── Seguridad: ocultar versión del servidor ──
+    # ── Seguridad: ocultar version del servidor ──
     SeguridadIIS
 
     # ── Firewall ──
@@ -339,7 +339,7 @@ function instalarIIS {
         Write-Host "Headers recibidos:" -ForegroundColor Cyan
         $response.Headers | Format-Table -AutoSize
     } catch {
-        printWarn "No se pudo verificar automáticamente. Usa: curl -I http://localhost:$puerto"
+        printWarn "No se pudo verificar automaticamente. Usa: curl -I http://localhost:$puerto"
     }
 }
 
@@ -350,12 +350,12 @@ function instalarSSH {
     param([int]$puerto)
 
     Clear-Host
-    Write-Host "─── Instalación de simple-http-server ───" -ForegroundColor Magenta
+    Write-Host "─── Instalacion de simple-http-server ───" -ForegroundColor Magenta
     Write-Host ""
 
     # simple-http-server es un binario en Rust (cargo)
-    # Alternativa más simple: usar Python http.server o http-server (npm)
-    # Aquí usamos http-server de Node.js/npm por ser más común
+    # Alternativa mas simple: usar Python http.server o http-server (npm)
+    # Aqui usamos http-server de Node.js/npm por ser mas comun
 
     # Verificar Node.js
     if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
@@ -379,16 +379,16 @@ function instalarSSH {
         return
     }
 
-    # Mostrar últimas versiones
+    # Mostrar ultimas versiones
     $verArray = $verJson | Select-Object -Last 5
-    Write-Host "Versiones disponibles (últimas 5):" -ForegroundColor Cyan
+    Write-Host "Versiones disponibles (ultimas 5):" -ForegroundColor Cyan
     for ($i = 0; $i -lt $verArray.Count; $i++) {
         $etiqueta = if ($i -eq ($verArray.Count - 1)) { "[Latest]" } elseif ($i -eq 0) { "[LTS/Estable]" } else { "" }
         Write-Host "  $($i+1). $($verArray[$i]) $etiqueta"
     }
     Write-Host ""
 
-    $selVer = Read-Host "Selecciona versión (1-$($verArray.Count))"
+    $selVer = Read-Host "Selecciona version (1-$($verArray.Count))"
     $idx = [int]$selVer - 1
     if ($idx -lt 0 -or $idx -ge $verArray.Count) { $idx = $verArray.Count - 1 }
     $versionElegida = $verArray[$idx]
@@ -440,7 +440,7 @@ function instalarSSH {
 # ----------------
 
 function SeguridadIIS {
-    printInfo "Aplicando configuración de seguridad en IIS..."
+    printInfo "Aplicando configuracion de seguridad en IIS..."
 
     Import-Module WebAdministration -ErrorAction SilentlyContinue
 
@@ -470,7 +470,7 @@ function SeguridadIIS {
     }
 
     # 3. Agregar headers de seguridad
-    # X-Frame-Options: evita Clickjacking (que tu página sea metida en un iframe)
+    # X-Frame-Options: evita Clickjacking (que tu pagina sea metida en un iframe)
     Add-WebConfigurationProperty `
         -PSPath "MACHINE/WEBROOT/APPHOST" `
         -Filter "system.webServer/httpProtocol/customHeaders" `
@@ -486,7 +486,7 @@ function SeguridadIIS {
         -Value @{name='X-Content-Type-Options'; value='nosniff'} `
         -ErrorAction SilentlyContinue
 
-    # 4. Deshabilitar métodos HTTP peligrosos (TRACE, TRACK)
+    # 4. Deshabilitar metodos HTTP peligrosos (TRACE, TRACK)
     # TRACE permite a atacantes robar cookies mediante Cross-Site Tracing (XST)
     Add-WebConfigurationProperty `
         -PSPath "MACHINE/WEBROOT/APPHOST" `
@@ -511,15 +511,15 @@ function SeguridadApache {
     printInfo "Aplicando seguridad en Apache..."
     $httpdConf = "$apachePath\conf\httpd.conf"
 
-    # Ocultar versión: ServerTokens Prod (solo muestra "Apache", no la versión)
-    # ServerSignature Off (quita la firma del pie de página de errores)
+    # Ocultar version: ServerTokens Prod (solo muestra "Apache", no la version)
+    # ServerSignature Off (quita la firma del pie de pagina de errores)
     $seguridad = @"
 
-# === SEGURIDAD: Ocultar información del servidor ===
+# === SEGURIDAD: Ocultar informacion del servidor ===
 ServerTokens Prod
 ServerSignature Off
 
-# Deshabilitar métodos peligrosos
+# Deshabilitar metodos peligrosos
 <LimitExcept GET POST HEAD>
     Require all denied
 </LimitExcept>
@@ -563,7 +563,7 @@ function CrearHTML {
     <div class="card">
         <h1>Servidor Activo</h1>
         <div class="info">Servidor: <strong>$servicio</strong></div>
-        <div class="info">Versión: <strong>$version</strong></div>
+        <div class="info">Version: <strong>$version</strong></div>
         <div class="info">Puerto: <strong>$puerto</strong></div>
     </div>
 </body>
@@ -599,11 +599,11 @@ function InstalarHTTP {
 
     if ($s -eq "0") { return }
     if ($s -notin @("1","2","3")) {
-        printWarn "Opción no válida."
+        printWarn "Opcion no valida."
         return
     }
 
-    # Pedir puerto DESPUÉS de elegir servidor
+    # Pedir puerto DESPUeS de elegir servidor
     Write-Host ""
     $puerto = pedirPuerto -default 80
 

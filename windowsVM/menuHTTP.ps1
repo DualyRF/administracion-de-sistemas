@@ -17,7 +17,7 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 . ".\librerias\funcionesHTTP.ps1"
 
 # -------------------
-# Menú principal
+# Menu principal
 # -------------------
 function menuPrincipalHTTP {
     do {
@@ -33,11 +33,11 @@ function menuPrincipalHTTP {
         Write-Host "────────────────────────────────────────" -ForegroundColor Blue
         Write-Host ""
 
-        $op = Read-Host "Opción"
+        $op = Read-Host "Selecciona una opcion"
 
         switch ($op) {
             "1" { 
-                InstalarHTTP;              
+                InstalarHTTP         
                 Read-Host "`nEnter para continuar" 
             }
             "2" { 
@@ -49,7 +49,8 @@ function menuPrincipalHTTP {
                 Read-Host "`nEnter para continuar" 
             }
             "4" { Write-Host "Saliendo..."; return }
-            default { Write-Host "[!] Opción no válida." -ForegroundColor Yellow; Start-Sleep -Seconds 1 }
+
+            default { Write-Host "[!] Opcion no valida." -ForegroundColor Yellow; Start-Sleep -Seconds 1 }
         }
     } while ($true)
 }
