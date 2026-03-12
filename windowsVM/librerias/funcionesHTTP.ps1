@@ -639,30 +639,54 @@ function CrearHTML {
     )
 
     $contenido = @"
+
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>$servicio - Activo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title> Servidor HTTP UwU </title>
+
     <style>
-        body { font-family: Arial, sans-serif; background: #1a1a2e; color: #eee; 
-               display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { background: #16213e; padding: 40px; border-radius: 10px; 
-                border-left: 5px solid #0f3460; text-align: center; }
-        h1 { color: #e94560; }
-        .info { background: #0f3460; padding: 10px; border-radius: 5px; margin: 10px 0; }
+        .infoServ { 
+            background:#252526; 
+            border:1px solid #3c3c3c; 
+            padding:2rem 3rem;
+            border-radius:8px; 
+            text-align:center; 
+        }
+        span { 
+            color: #f44462; 
+        }
+        h1 { 
+            color: #982f4a; 
+        }
     </style>
+
 </head>
-<body>
-    <div class="card">
-        <h1>Servidor Activo</h1>
+<body style="background-color: rgb(255, 226, 231)">
+    <h1> KiiiKiii 키키 '404 (New Era)' Audio </h1>
+    <p><img src="kiikii.webp" width="300" height="300"> </p>
+    
+    <p>
+    <audio controls>
+        <source src="404(New-Era).mp3" type="audio/mpeg">
+        <source src="audio.ogg" type="audio/ogg">
+            Tu navegador no soporta la etiqueta de audio.
+    </audio>
+    </p>
+
+    <div class="infoServ">
+        <h1>Servidor Activo!!</h1>
         <div class="info">Servidor: <strong>$servicio</strong></div>
         <div class="info">Version: <strong>$version</strong></div>
         <div class="info">Puerto: <strong>$puerto</strong></div>
+        <p> Disfruta la canción :3 </p>
     </div>
+
 </body>
 </html>
-"@
+"@        
 
     # Crear directorio si no existe
     if (-not (Test-Path $rutaWeb)) {
