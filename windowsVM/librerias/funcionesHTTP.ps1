@@ -655,6 +655,7 @@ function CrearHTML {
             border-radius:8px; 
             text-align:center; 
             color: rgb(255, 235, 239);
+            width: 600px;
         }
         span { 
             color: #f44462; 
@@ -662,6 +663,12 @@ function CrearHTML {
         h1 { 
             color: #982f4a; 
         }
+	body{
+	    display: flex;
+  	    flex-direction: column;
+  	    align-items: center;
+  	    justify-content: center;
+	}
     </style>
 
 </head>
@@ -671,7 +678,6 @@ function CrearHTML {
         <div class="info">Servidor: <strong>$servicio</strong></div>
         <div class="info">Version: <strong>$version</strong></div>
         <div class="info">Puerto: <strong>$puerto</strong></div>
-        <p> Disfruta la canción :3 </p>
     </div>
 
 </body>
