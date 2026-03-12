@@ -649,11 +649,12 @@ function CrearHTML {
 
     <style>
         .infoServ { 
-            background:#252526; 
-            border:1px solid #3c3c3c; 
+            background: rgb(249, 181, 192); 
+            border:1px solid #982f4a; 
             padding:2rem 3rem;
             border-radius:8px; 
             text-align:center; 
+            color: rgb(255, 235, 239);
         }
         span { 
             color: #f44462; 
@@ -665,17 +666,6 @@ function CrearHTML {
 
 </head>
 <body style="background-color: rgb(255, 226, 231)">
-    <h1> KiiiKiii 키키 '404 (New Era)' Audio </h1>
-    <p><img src="kiikii.webp" width="300" height="300"> </p>
-    
-    <p>
-    <audio controls>
-        <source src="404(New-Era).mp3" type="audio/mpeg">
-        <source src="audio.ogg" type="audio/ogg">
-            Tu navegador no soporta la etiqueta de audio.
-    </audio>
-    </p>
-
     <div class="infoServ">
         <h1>Servidor Activo!!</h1>
         <div class="info">Servidor: <strong>$servicio</strong></div>
