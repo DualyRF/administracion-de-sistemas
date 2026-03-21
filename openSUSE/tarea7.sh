@@ -281,12 +281,42 @@ instalar_apache() {
 
     # Crear pagina de prueba
     cat > /srv/www/htdocs/index.html << 'HTMLEOF'
+
 <!DOCTYPE html>
-<html>
-<head><title>Apache - reprobados.com</title></head>
-<body>
-<h1>Apache HTTP Server - Practica 7</h1>
-<p>Servidor: 192.168.10.184 - reprobados.com</p>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title> Apache - Reprobados.com </title>
+
+    <style>
+        .infoServ { 
+            background: rgb(249, 181, 192); 
+            border:1px solid #982f4a; 
+            padding:2rem 3rem;
+            border-radius:8px; 
+            text-align:center; 
+            color: rgb(255, 235, 239);
+            width: 600px;
+        }
+        h1 { 
+            color: #982f4a; 
+        }
+	body{
+	    display: flex;
+  	    flex-direction: column;
+  	    align-items: center;
+  	    justify-content: center;
+	}
+    </style>
+
+</head>
+<body style="background-color: rgb(255, 226, 231)">
+    <div class="infoServ">
+        <h1> Servidor Apache </h1>
+        <div class="info">Servidor: 192.168.10.184 - reprobados.com</div>
+    </div>
+
 </body>
 </html>
 HTMLEOF
