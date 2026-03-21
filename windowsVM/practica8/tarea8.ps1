@@ -37,11 +37,11 @@ function inicializarEntorno {
     $passSegura = ConvertTo-SecureString "SafeModeP@ss123!" -AsPlainText -Force
 
     Install-ADDSForest `
-        -DomainName            $DOMINIO `
+        -DomainName            "empresa.local" `
         -DomainNetBiosName     "EMPRESA" `
         -InstallDns            $true `
         -SafeModeAdministratorPassword $passSegura `
-        -Force                 $true
+        -Force
 
     Print-Warn "El servidor se reiniciara. Ejecuta el script de nuevo despues del reinicio."
 }
