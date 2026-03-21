@@ -1,8 +1,2 @@
-$passSegura = ConvertTo-SecureString "SafeModeP@ss123!" -AsPlainText -Force
-
-Install-ADDSForest `
-    -DomainName "empresa.local" `
-    -DomainNetBiosName "EMPRESA" `
-    -InstallDns $true `
-    -SafeModeAdministratorPassword $passSegura `
-    -Force
+$archivo = "C:\Users\Administrador\Desktop\administracion-de-sistemas\windowsVM\practica8\tarea8.ps1"
+(Get-Content $archivo) -replace '\[System\.Guid\]::NewGuid\(\)\.ToString\("B"\)', '[System.Guid]::NewGuid().ToString()' | Set-Content $archivo
