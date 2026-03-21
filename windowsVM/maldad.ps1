@@ -1,2 +1,8 @@
-$archivo = "C:\Users\Administrador\Desktop\administracion-de-sistemas\windowsVM\practica8\tarea8.ps1"
-(Get-Content $archivo) -replace '-Force\s+\$true', '-Force' | Set-Content $archivo
+$passSegura = ConvertTo-SecureString "SafeModeP@ss123!" -AsPlainText -Force
+
+Install-ADDSForest `
+    -DomainName "empresa.local" `
+    -DomainNetBiosName "EMPRESA" `
+    -InstallDns $true `
+    -SafeModeAdministratorPassword $passSegura `
+    -Force
