@@ -1,2 +1,2 @@
-Write-Host "Hola Mundo Cruel :o" -ForegroundColor Magenta
-Start-Sleep -Seconds 2
+$archivo = "C:\Users\Administrador\Desktop\administracion-de-sistemas\windowsVM\practica8\tarea8.ps1"
+(Get-Content $archivo) -replace '-Force\s+\$true', '-Force' | Set-Content $archivo
