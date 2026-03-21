@@ -8,7 +8,7 @@
 # -----------------------------------------------
 $DOMINIO       = "empresa.local"
 $DC_PATH       = "DC=empresa,DC=local"
-$RUTA_CSV      = "C:\usuarios.csv"
+$RUTA_CSV      = "C:\csv8.csv"
 $RUTA_PERFILES = "C:\Perfiles"
 $PASSWORD      = "P@ssw0rd123!"
 
