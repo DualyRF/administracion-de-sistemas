@@ -3,6 +3,7 @@
 # ==============================================================
 #   Gobernanza, Cuotas y Control de Aplicaciones en AD
 #   GPO + FSRM + AppLocker + Active Directory
+#   v3 - Corregido: UTC, FSRM notificaciones, SmbShare, AppLocker GPO
 # ==============================================================
 
 # -----------------------------------------------
@@ -10,9 +11,15 @@
 # -----------------------------------------------
 $DOMINIO       = "empresa.local"
 $DC_PATH       = "DC=empresa,DC=local"
-$RUTA_CSV      = "C:\usuarios.csv"
+$RUTA_CSV      = "C:\Users\Administrador\windowsVM\practica8\csv8.csv"
 $RUTA_PERFILES = "C:\Perfiles"
+$SHARE_NAME    = "HomeUsers"
 $PASSWORD      = "P@ssw0rd123!"
+
+# Offset UTC de los USUARIOS (Sinaloa = UTC-7 todo el ano)
+# El servidor puede estar en otra zona, no importa
+# AD siempre almacena logon hours en UTC internamente
+$UTC_OFFSET = -7
 
 
 # -----------------------------------------------
@@ -37,10 +44,10 @@ function inicializarEntorno {
 
     Print-Info "Promoviendo servidor a Controlador de Dominio..."
 
-    $passSegura = ConvertTo-SecureString "SafeModeP@ss123!" -AsPlainText -Force
+    $p = ConvertTo-SecureString "SafeModeP@ss123!" -AsPlainText -Force
 
-    # -Force es un switch, no acepta $true ni $false
-    Install-ADDSForest -DomainName $DOMINIO -DomainNetBiosName "EMPRESA" -InstallDns $true -SafeModeAdministratorPassword $passSegura -Force
+    Install-ADDSForest -DomainName "empresa.local" -DomainNetBiosName "EMPRESA" `
+        -InstallDns -SafeModeAdministratorPassword $p -Force
 
     Print-Warn "El servidor se reiniciara. Ejecuta el script de nuevo despues del reinicio."
 }
@@ -48,9 +55,7 @@ function inicializarEntorno {
 
 # -----------------------------------------------
 # 2. CREAR UOs, GRUPOS Y USUARIOS DESDE CSV
-#    El CSV debe tener columnas:
-#    Nombre, Apellido, Usuario, Departamento
-#    Sin acentos ni caracteres especiales en el CSV
+#    CSV columnas: Nombre, Apellido, Usuario, Departamento
 # -----------------------------------------------
 function crearEstructuraAD {
     Print-Info "Creando Unidades Organizativas..."
@@ -119,6 +124,19 @@ function crearEstructuraAD {
         }
     }
 
+    # Crear recurso compartido SMB
+    Print-Info "Verificando recurso compartido SMB..."
+    if (-not (Get-SmbShare -Name $SHARE_NAME -ErrorAction SilentlyContinue)) {
+        New-SmbShare -Name $SHARE_NAME `
+                     -Path $RUTA_PERFILES `
+                     -FullAccess "Administradores" `
+                     -ChangeAccess "Usuarios del dominio" `
+                     -Description "Carpetas personales de usuarios del dominio"
+        Print-Ok "Recurso compartido \\$env:COMPUTERNAME\$SHARE_NAME creado."
+    } else {
+        Print-Warn "El recurso compartido '$SHARE_NAME' ya existe."
+    }
+
     Print-Ok "Estructura AD lista."
 }
 
@@ -126,33 +144,34 @@ function crearEstructuraAD {
 # -----------------------------------------------
 # 3. HORARIOS DE INICIO DE SESION (LOGON HOURS)
 #    + GPO para forzar cierre de sesion
-#    Cuates:   08:00 - 15:00
-#    NoCuates: 15:00 - 02:00 (dia siguiente)
+#
+#    CORRECCION UTC:
+#    AD almacena logon hours en UTC internamente.
+#    Sinaloa es UTC-7, entonces:
+#      Cuates   08:00-15:00 local = 15:00-22:00 UTC
+#      NoCuates 15:00-02:00 local = 22:00-09:00 UTC
 # -----------------------------------------------
 function asignarHorarios {
     param(
         [string]$Grupo,
-        [int]$HoraInicio,
-        [int]$HoraFin
+        [int[]]$HorasLocales
     )
 
-    Print-Info "Configurando horario para '$Grupo': ${HoraInicio}h - ${HoraFin}h"
+    # Convertir cada hora local a UTC
+    # utc = ((local - offset) % 24 + 24) % 24
+    # Sinaloa UTC-7: utc = (local + 7) % 24
+    $horasUTC = $HorasLocales | ForEach-Object {
+        (($_ - $UTC_OFFSET) % 24 + 24) % 24
+    }
+
+    Print-Info "Horario '$Grupo': local=$($HorasLocales -join ',') -> UTC=$($horasUTC -join ',')"
 
     $bytes = [byte[]](,0x00 * 21)
 
     for ($dia = 0; $dia -lt 7; $dia++) {
-        $finDelDia = [Math]::Min($HoraFin, 24)
-        for ($hora = $HoraInicio; $hora -lt $finDelDia; $hora++) {
+        foreach ($hora in $horasUTC) {
             $bit = ($dia * 24) + $hora
             $bytes[[Math]::Floor($bit / 8)] = $bytes[[Math]::Floor($bit / 8)] -bor (1 -shl ($bit % 8))
-        }
-
-        if ($HoraFin -gt 24) {
-            $diaSig = ($dia + 1) % 7
-            for ($hora = 0; $hora -lt ($HoraFin - 24); $hora++) {
-                $bit = ($diaSig * 24) + $hora
-                $bytes[[Math]::Floor($bit / 8)] = $bytes[[Math]::Floor($bit / 8)] -bor (1 -shl ($bit % 8))
-            }
         }
     }
 
@@ -163,8 +182,14 @@ function asignarHorarios {
 }
 
 function configurarHorarios {
-    asignarHorarios -Grupo "Cuates"   -HoraInicio 8  -HoraFin 15
-    asignarHorarios -Grupo "NoCuates" -HoraInicio 15 -HoraFin 26
+    # Cuates: 8:00 AM a 3:00 PM (horas 8 al 14, no incluye 15)
+    $horasCuates = 8..14
+
+    # NoCuates: 3:00 PM a 2:00 AM (horas 15..23 y 0..1)
+    $horasNoCuates = @(15,16,17,18,19,20,21,22,23,0,1)
+
+    asignarHorarios -Grupo "Cuates"   -HorasLocales $horasCuates
+    asignarHorarios -Grupo "NoCuates" -HorasLocales $horasNoCuates
 
     Print-Info "Creando GPO para forzar cierre de sesion al expirar horario..."
 
@@ -195,26 +220,36 @@ function configurarHorarios {
 
 
 # -----------------------------------------------
-# 4. FSRM: CUOTAS Y APANTALLAMIENTO DE ARCHIVOS
+# 4. FSRM: CUOTAS Y APANTALLAMIENTO
 #    Cuates:   10 MB (cuota dura)
 #    NoCuates:  5 MB (cuota dura)
-#    Bloquea: .mp3 .mp4 .avi .exe .msi .bat
+#    Bloquea:  .mp3 .mp4 .avi .mkv .exe .msi .bat .cmd
+#
+#    CORRECCION: -Threshold y -Notification agregados
+#    para que el Visor de Eventos registre los bloqueos
 # -----------------------------------------------
 function configurarFSRM {
     Import-Module FileServerResourceManager -ErrorAction Stop
 
+    # Acciones de evento para cuotas
+    $accionAviso = New-FsrmAction -Type Event -EventType Warning `
+        -Body "FSRM AVISO 85%: [Source Io Owner] uso el 85% de la cuota en [Quota Path]."
+
+    $accionCuota = New-FsrmAction -Type Event -EventType Warning `
+        -Body "FSRM CUOTA SUPERADA: [Source Io Owner] intento superar la cuota en [Quota Path]. Archivo: [Source File Path]. Limite: [Quota Limit MB] MB."
+
+    $umbral85  = New-FsrmQuotaThreshold -Percentage 85  -Action $accionAviso
+    $umbral100 = New-FsrmQuotaThreshold -Percentage 100 -Action $accionCuota
+
     Print-Info "Creando plantillas de cuota..."
 
-    # Eliminar plantillas anteriores para crearlas limpias
     Remove-FsrmQuotaTemplate -Name "Cuota-Cuates"   -Confirm:$false -ErrorAction SilentlyContinue
     Remove-FsrmQuotaTemplate -Name "Cuota-NoCuates" -Confirm:$false -ErrorAction SilentlyContinue
 
-    # -SoftLimit es un switch, no acepta $true ni $false
-    # Sin -SoftLimit = cuota dura (bloquea cuando se llena)
-    New-FsrmQuotaTemplate -Name "Cuota-Cuates"   -Size (10MB)
+    New-FsrmQuotaTemplate -Name "Cuota-Cuates"   -Size (10MB) -Threshold @($umbral85, $umbral100)
     Print-Ok "Plantilla creada: Cuota-Cuates (10 MB)"
 
-    New-FsrmQuotaTemplate -Name "Cuota-NoCuates" -Size (5MB)
+    New-FsrmQuotaTemplate -Name "Cuota-NoCuates" -Size (5MB)  -Threshold @($umbral85, $umbral100)
     Print-Ok "Plantilla creada: Cuota-NoCuates (5 MB)"
 
     Print-Info "Creando carpetas y aplicando cuotas por usuario..."
@@ -237,30 +272,33 @@ function configurarFSRM {
 
     Print-Info "Configurando apantallamiento de archivos..."
 
-    # Eliminar grupo y plantilla anteriores para crearlos limpios
-    Remove-FsrmFileGroup        -Name "Archivos-Prohibidos"     -Confirm:$false -ErrorAction SilentlyContinue
-    Remove-FsrmFileScreenTemplate -Name "Pantalla-Prohibidos"   -Confirm:$false -ErrorAction SilentlyContinue
+    # Accion de evento al bloquear archivo prohibido
+    $accionPantalla = New-FsrmAction -Type Event -EventType Warning `
+        -Body "FSRM BLOQUEO: El usuario [Source Io Owner] intento guardar un archivo no permitido en [File Screen Path]. Archivo bloqueado: [Source File Path]."
+
+    Remove-FsrmFileGroup          -Name "Archivos-Prohibidos" -Confirm:$false -ErrorAction SilentlyContinue
+    Remove-FsrmFileScreenTemplate -Name "Pantalla-Prohibidos" -Confirm:$false -ErrorAction SilentlyContinue
 
     New-FsrmFileGroup -Name "Archivos-Prohibidos" `
-        -IncludePattern @("*.mp3","*.mp4","*.avi","*.exe","*.msi","*.bat")
+        -IncludePattern @("*.mp3","*.mp4","*.avi","*.mkv","*.wmv","*.exe","*.msi","*.bat","*.cmd")
     Print-Ok "Grupo de archivos prohibidos creado."
 
-    # -Active es un switch, no acepta $true ni $false
-    New-FsrmFileScreenTemplate -Name "Pantalla-Prohibidos" -Active -IncludeGroup @("Archivos-Prohibidos")
-    Print-Ok "Plantilla de apantallamiento creada."
+    # -Active = bloqueo inmediato (hard block)
+    New-FsrmFileScreenTemplate -Name "Pantalla-Prohibidos" `
+        -Active `
+        -IncludeGroup @("Archivos-Prohibidos") `
+        -Notification $accionPantalla
+    Print-Ok "Plantilla de apantallamiento creada con notificacion de evento."
 
-    Get-ADGroupMember -Identity "Cuates"   | ForEach-Object {
-        $ruta = "$RUTA_PERFILES\$($_.SamAccountName)"
-        Remove-FsrmFileScreen -Path $ruta -Confirm:$false -ErrorAction SilentlyContinue
-        New-FsrmFileScreen -Path $ruta -Template "Pantalla-Prohibidos"
-        Print-Ok "Apantallamiento aplicado: $ruta"
-    }
-
-    Get-ADGroupMember -Identity "NoCuates" | ForEach-Object {
-        $ruta = "$RUTA_PERFILES\$($_.SamAccountName)"
-        Remove-FsrmFileScreen -Path $ruta -Confirm:$false -ErrorAction SilentlyContinue
-        New-FsrmFileScreen -Path $ruta -Template "Pantalla-Prohibidos"
-        Print-Ok "Apantallamiento aplicado: $ruta"
+    foreach ($grupo in @("Cuates","NoCuates")) {
+        Get-ADGroupMember -Identity $grupo | ForEach-Object {
+            $ruta = "$RUTA_PERFILES\$($_.SamAccountName)"
+            if (Test-Path $ruta) {
+                Remove-FsrmFileScreen -Path $ruta -Confirm:$false -ErrorAction SilentlyContinue
+                New-FsrmFileScreen -Path $ruta -Template "Pantalla-Prohibidos"
+                Print-Ok "Apantallamiento aplicado: $ruta"
+            }
+        }
     }
 
     Print-Ok "FSRM configurado correctamente."
@@ -272,6 +310,9 @@ function configurarFSRM {
 #    Cuates:   PERMITEN notepad.exe (por ruta)
 #    NoCuates: BLOQUEAN notepad.exe (por hash SHA256)
 #              El hash bloquea aunque renombren el .exe
+#
+#    CORRECCION: Aplica la politica al GPO via LDAP
+#    (Set-AppLockerPolicy sin -Ldap solo aplica localmente)
 # -----------------------------------------------
 function configurarAppLocker {
     $rutaNotepad = "$env:SystemRoot\System32\notepad.exe"
@@ -290,7 +331,6 @@ function configurarAppLocker {
     $sidNoCuates = (Get-ADGroup -Identity "NoCuates").SID.Value
     $sidAdmins   = "S-1-5-32-544"
 
-    # GUIDs sin llaves {} porque AppLocker no acepta el formato "B"
     $g1 = [System.Guid]::NewGuid().ToString()
     $g2 = [System.Guid]::NewGuid().ToString()
     $g3 = [System.Guid]::NewGuid().ToString()
@@ -298,27 +338,30 @@ function configurarAppLocker {
 
     Print-Info "Generando politica XML de AppLocker..."
 
-    # XML construido con concatenacion para evitar problemas de encoding
     $xml  = "<?xml version=""1.0"" encoding=""utf-8""?>`n"
     $xml += "<AppLockerPolicy Version=""1"">`n"
     $xml += "  <RuleCollection Type=""Exe"" EnforcementMode=""Enabled"">`n"
     $xml += "    <FilePathRule Id=""$g1"" Name=""Admins - permitir todo"" Description=""Administradores sin restricciones"" UserOrGroupSid=""$sidAdmins"" Action=""Allow"">`n"
     $xml += "      <Conditions><FilePathCondition Path=""*""/></Conditions>`n"
     $xml += "    </FilePathRule>`n"
-    $xml += "    <FilePathRule Id=""$g2"" Name=""Cuates - permitir notepad"" Description=""Cuates pueden usar notepad"" UserOrGroupSid=""$sidCuates"" Action=""Allow"">`n"
+    $xml += "    <FilePathRule Id=""$g2"" Name=""Cuates - permitir notepad"" Description=""Cuates pueden usar notepad por ruta"" UserOrGroupSid=""$sidCuates"" Action=""Allow"">`n"
     $xml += "      <Conditions><FilePathCondition Path=""%SYSTEM32%\notepad.exe""/></Conditions>`n"
     $xml += "    </FilePathRule>`n"
-    $xml += "    <FileHashRule Id=""$g3"" Name=""NoCuates - bloquear notepad por hash"" Description=""Bloqueo por hash resiste renombrado"" UserOrGroupSid=""$sidNoCuates"" Action=""Deny"">`n"
+    $xml += "    <FileHashRule Id=""$g3"" Name=""NoCuates - bloquear notepad por hash"" Description=""Bloqueo por hash SHA256 resiste renombrado"" UserOrGroupSid=""$sidNoCuates"" Action=""Deny"">`n"
     $xml += "      <Conditions>`n"
     $xml += "        <FileHashCondition>`n"
     $xml += "          <FileHash Type=""SHA256"" Data=""$hash"" SourceFileName=""notepad.exe"" SourceFileLength=""$tamano""/>`n"
     $xml += "        </FileHashCondition>`n"
     $xml += "      </Conditions>`n"
     $xml += "    </FileHashRule>`n"
-    $xml += "    <FilePathRule Id=""$g4"" Name=""NoCuates - permitir carpeta Windows"" Description=""Permitir ejecucion desde Windows"" UserOrGroupSid=""$sidNoCuates"" Action=""Allow"">`n"
+    $xml += "    <FilePathRule Id=""$g4"" Name=""NoCuates - permitir Windows"" Description=""Permitir ejecucion general desde Windows excepto notepad"" UserOrGroupSid=""$sidNoCuates"" Action=""Allow"">`n"
     $xml += "      <Conditions><FilePathCondition Path=""%WINDIR%\*""/></Conditions>`n"
     $xml += "    </FilePathRule>`n"
     $xml += "  </RuleCollection>`n"
+    $xml += "  <RuleCollection Type=""Script"" EnforcementMode=""NotConfigured""/>`n"
+    $xml += "  <RuleCollection Type=""Msi""    EnforcementMode=""NotConfigured""/>`n"
+    $xml += "  <RuleCollection Type=""Dll""    EnforcementMode=""NotConfigured""/>`n"
+    $xml += "  <RuleCollection Type=""Appx""   EnforcementMode=""NotConfigured""/>`n"
     $xml += "</AppLockerPolicy>"
 
     $rutaXML = "C:\applocker-policy.xml"
@@ -341,20 +384,35 @@ function configurarAppLocker {
         Print-Warn "Vinculo de GPO ya existe."
     }
 
-    Set-AppLockerPolicy -XMLPolicy $rutaXML -Merge
+    # Habilitar AppIDSvc en clientes via GPO (Start=2 = Automatico)
+    Set-GPRegistryValue -Name $nombreGPO `
+        -Key "HKLM\SYSTEM\CurrentControlSet\Services\AppIDSvc" `
+        -ValueName "Start" -Type DWord -Value 2
 
-    # Iniciar servicio AppIDSvc (requerido por AppLocker)
+    # CORRECCION: Aplicar politica AL GPO via LDAP
+    # Sin -Ldap, Set-AppLockerPolicy solo aplica en el equipo local (el DC)
+    # y los clientes del dominio nunca reciben la regla
+    $gpoObj   = Get-GPO -Name $nombreGPO
+    $gpoId    = $gpoObj.Id.ToString().ToUpper()
+    $ldapPath = "LDAP://CN={$gpoId},CN=Policies,CN=System,$DC_PATH"
+
+    Print-Info "Aplicando politica AppLocker al GPO via LDAP..."
+    Set-AppLockerPolicy -XMLPolicy $rutaXML -Ldap $ldapPath -Merge
+    Print-Ok "Politica aplicada al GPO '$nombreGPO'."
+    Print-Ok "Hash SHA256: $hash"
+    Print-Ok "Renombrar notepad.exe NO evita el bloqueo (hash del contenido binario)."
+
+    # Habilitar AppIDSvc localmente en el servidor
+    Set-Service -Name AppIDSvc -StartupType Automatic
     Start-Service -Name AppIDSvc -ErrorAction SilentlyContinue
 
     Invoke-GPUpdate -Force -ErrorAction SilentlyContinue
-
     Print-Ok "AppLocker configurado correctamente."
 }
 
 
 # -----------------------------------------------
 # 6. VERIFICACION
-#    Revisa el estado de todos los componentes
 # -----------------------------------------------
 function verificar {
     Write-Host ""
@@ -362,20 +420,31 @@ function verificar {
 
     foreach ($ou in @("Cuates","NoCuates")) {
         try {
-            Get-ADOrganizationalUnit "OU=$ou,$DC_PATH" | Out-Null
+            Get-ADOrganizationalUnit -Filter "Name -eq '$ou'" | Out-Null
             Print-Ok "OU existe: $ou"
         } catch { Print-Err "OU no encontrada: $ou" }
     }
 
     foreach ($g in @("Cuates","NoCuates")) {
         $m = Get-ADGroupMember -Identity $g -ErrorAction SilentlyContinue
-        Print-Info "Grupo $g -> $($m.Count) miembros: $(($m.SamAccountName) -join ', ')"
+        Print-Info "Grupo $g -> $($m.Count) miembros: $(($m | Select-Object -Expand SamAccountName) -join ', ')"
     }
 
-    $cuotas = Get-FsrmQuota -Path "$RUTA_PERFILES\*" -ErrorAction SilentlyContinue
-    Print-Info "Cuotas FSRM activas: $($cuotas.Count)"
+    if (Get-SmbShare -Name $SHARE_NAME -ErrorAction SilentlyContinue) {
+        Print-Ok "Recurso compartido '$SHARE_NAME' activo."
+    } else {
+        Print-Err "Recurso compartido '$SHARE_NAME' NO encontrado."
+    }
 
-    $screens = Get-FsrmFileScreen -Path "$RUTA_PERFILES\*" -ErrorAction SilentlyContinue
+    $cuotas = Get-FsrmQuota -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$RUTA_PERFILES\*" }
+    Print-Info "Cuotas FSRM activas: $($cuotas.Count)"
+    foreach ($c in $cuotas) {
+        $usadoMB  = [math]::Round($c.Usage / 1MB, 2)
+        $limiteMB = [math]::Round($c.Size  / 1MB, 0)
+        Print-Info "  $($c.Path) -> $usadoMB MB / $limiteMB MB"
+    }
+
+    $screens = Get-FsrmFileScreen -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$RUTA_PERFILES\*" }
     Print-Info "Apantallamientos activos: $($screens.Count)"
 
     $pol = Get-AppLockerPolicy -Effective -ErrorAction SilentlyContinue
@@ -391,16 +460,36 @@ function verificar {
         else { Print-Err "GPO no encontrada: $gpo" }
     }
 
+    $utcAhora   = [System.DateTime]::UtcNow
+    $localAhora = $utcAhora.AddHours($UTC_OFFSET)
+    Print-Info "Hora UTC actual:    $($utcAhora.ToString('HH:mm'))"
+    Print-Info "Hora Sinaloa:       $($localAhora.ToString('HH:mm'))"
+    Print-Info "Cuates:   08:00-15:00 local = 15:00-22:00 UTC"
+    Print-Info "NoCuates: 15:00-02:00 local = 22:00-09:00 UTC"
+
+    # Prueba escritura 6MB en carpeta NoCuates
     $testUser = (Get-ADGroupMember -Identity "NoCuates" | Select-Object -First 1).SamAccountName
     $testFile = "$RUTA_PERFILES\$testUser\test_cuota.bin"
-    Print-Info "Probando cuota: escribiendo 6 MB en carpeta de $testUser..."
+    Print-Info "Probando cuota: escribiendo 6 MB en carpeta de '$testUser'..."
     try {
-        $bytes = [byte[]](,0xFF * (6 * 1MB))
-        [System.IO.File]::WriteAllBytes($testFile, $bytes)
+        $testBytes = [byte[]](,0xFF * (6 * 1MB))
+        [System.IO.File]::WriteAllBytes($testFile, $testBytes)
         Print-Warn "ALERTA: El archivo se escribio. Revisa la cuota de $testUser."
-        Remove-Item $testFile -Force
+        Remove-Item $testFile -Force -ErrorAction SilentlyContinue
     } catch {
-        Print-Ok "Cuota funciona: escritura de 6 MB bloqueada correctamente."
+        Print-Ok "Cuota funciona: escritura de 6 MB bloqueada en carpeta de '$testUser'."
+    }
+
+    # Ultimos eventos FSRM
+    Print-Info "Ultimos eventos FSRM (60 min):"
+    $eventos = Get-WinEvent -LogName Application -ErrorAction SilentlyContinue |
+               Where-Object { $_.ProviderName -eq "SRMSVC" -and $_.TimeCreated -gt (Get-Date).AddMinutes(-60) }
+    if ($eventos) {
+        $eventos | ForEach-Object {
+            Print-Info "  [$($_.TimeCreated.ToString('HH:mm:ss'))] $($_.Message)"
+        }
+    } else {
+        Print-Warn "No hay eventos FSRM en los ultimos 60 minutos."
     }
 
     Write-Host "--- FIN VERIFICACION ---" -ForegroundColor Yellow
@@ -417,6 +506,7 @@ function menuPrincipal {
         Write-Host "-----------------------------------------------" -ForegroundColor Yellow
         Write-Host "   Gobernanza, Cuotas y Control de             " -ForegroundColor Red
         Write-Host "   Aplicaciones en Active Directory            " -ForegroundColor Red
+        Write-Host "   v3 - UTC corregido para Sinaloa (UTC-7)    " -ForegroundColor DarkGray
         Write-Host "-----------------------------------------------" -ForegroundColor Yellow
         Write-Host "  1. Inicializar entorno  (solo una vez)"
         Write-Host "  2. Crear UOs, grupos y usuarios desde CSV"
